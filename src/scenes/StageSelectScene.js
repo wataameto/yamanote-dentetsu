@@ -116,13 +116,15 @@ export class StageSelectScene extends Phaser.Scene {
     routeLine.strokePath();
 
     // 中央線(オレンジ)が山手線の内側を横断する: 新宿 → 四ツ谷 → 御茶ノ水 → 神田。
-    // 四ツ谷は新宿と同じ高さ・御茶ノ水は神田と同じ高さで、中央の縦軸に通常サイズのボタンで置く
+    // 四ツ谷は新宿と同じ高さで新宿側に、御茶ノ水は神田と同じ高さで神田側に、
+    // それぞれボタン幅1/3ぶん中央から寄せて置く(寄せた側の駅とほぼ隣接する)
     const CHUO_COLOR = 0xf15a22;
     const shinjuku = points[findStationIndex('新宿')];
     const kanda = points[findStationIndex('神田')];
+    const chuoOffsetX = buttonWidth / 3;
     const chuoPoints = [
-      { x: centerX, y: shinjuku.y }, // 四ツ谷
-      { x: centerX, y: kanda.y }, // 御茶ノ水
+      { x: centerX - chuoOffsetX, y: shinjuku.y }, // 四ツ谷(新宿寄り)
+      { x: centerX + chuoOffsetX, y: kanda.y }, // 御茶ノ水(神田寄り)
     ];
     const chuoLine = this.add.graphics();
     chuoLine.lineStyle(6, CHUO_COLOR, 1);
