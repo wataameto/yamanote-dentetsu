@@ -180,6 +180,7 @@ export class GameBoardScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(2);
       if (nameText.width > buttonWidth * 0.9) nameText.setScale((buttonWidth * 0.9) / nameText.width);
+      bg.on('pointerdown', () => this.logStationProperties(i));
       this.stationButtons[i] = { bg, nameText };
     });
     CHUO_STATIONS.forEach((station, i) => {
@@ -1113,6 +1114,20 @@ export class GameBoardScene extends Phaser.Scene {
       this.log(`${player.name}は ${STATIONS[stationIndex].name}駅に とうちゃく`);
       proceedAfterShopping();
     }
+  }
+
+  // 駅ボタンをクリックしたときに、その駅の物件一覧(価格・所有者)をログに表示する
+  logStationProperties(stationIndex) {
+    const props = this.properties[stationIndex];
+    if (!props || props.length === 0) return;
+    const summary = props
+      .map((p) => {
+        if (p.ownerId === null) return `${p.name}¥${p.price}(空き)`;
+        const owner = this.players.find((pl) => pl.id === p.ownerId);
+        return `${p.name}¥${p.price}(${owner ? owner.name : '?'}所有)`;
+      })
+      .join(' / ');
+    this.log(`${STATIONS[stationIndex].name}の物件: ${summary}`);
   }
 
   showPropertyModal(stationIndex, player, onClose) {
