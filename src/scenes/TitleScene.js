@@ -27,12 +27,12 @@ export class TitleScene extends Phaser.Scene {
     this.add
       .text(width / 2, height / 2 - 110, 'すごろく × 資産バトル(桃鉄ライク)', {
         fontFamily: FONT_FAMILY,
-        fontSize: '18px',
+        fontSize: '22px',
         color: '#555',
       })
       .setOrigin(0.5);
     this.add
-      .text(width / 2, height / 2 - 60, 'プレイ年数をえらんでね', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#333' })
+      .text(width / 2, height / 2 - 60, 'プレイ年数をえらんでね', { fontFamily: FONT_FAMILY, fontSize: '24px', color: '#333' })
       .setOrigin(0.5);
 
     const years = [3, 5, 10];
@@ -53,11 +53,11 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.add
-      .text(width / 2, height / 2 + 150, 'あなた 🐕 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#777' })
+      .text(width / 2, height / 2 + 150, 'あなた 🐕 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#777' })
       .setOrigin(0.5);
 
     this.muteText = this.add
-      .text(width - 20, 20, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', { fontFamily: FONT_FAMILY, fontSize: '13px', color: '#555' })
+      .text(width - 20, 20, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#555' })
       .setOrigin(1, 0)
       .setInteractive({ useHandCursor: true });
     this.muteText.on('pointerdown', () => {

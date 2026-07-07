@@ -164,16 +164,17 @@ export class SFX {
     this.themePlaying = true;
 
     // 電車でお出かけする、軽快で明るいチップチューン(オリジナル曲)。
+    // まる系(triangle)の短い音でポンポン跳ねる感じにして、耳に痛いキンキン感を抑える。
     const step = 0.19; // 約126BPMの8分音符
     const N = {
       C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.0, A3: 220.0,
-      C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0, B5: 987.77, C6: 1046.5,
+      C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25,
     };
     const melody = [
-      N.C5, N.D5, N.E5, N.G5, N.E5, N.D5, N.C5, N.D5,
-      N.E5, N.F5, N.G5, N.A5, N.G5, N.F5, N.E5, N.D5,
-      N.G5, N.A5, N.B5, N.C6, N.B5, N.A5, N.G5, N.A5,
-      N.E5, N.D5, N.C5, 0, N.C5, 0, 0, 0,
+      N.C4, N.D4, N.E4, N.G4, N.E4, N.D4, N.C4, N.D4,
+      N.E4, N.F4, N.G4, N.A4, N.G4, N.F4, N.E4, N.D4,
+      N.G4, N.A4, N.B4, N.C5, N.B4, N.A4, N.G4, N.A4,
+      N.E4, N.D4, N.C4, 0, N.C4, 0, 0, 0,
     ];
     const bass = [N.C3, N.G3, N.A3, N.E3, N.F3, N.C3, N.G3, N.G3];
 
@@ -181,9 +182,8 @@ export class SFX {
       if (!this.themePlaying) return;
       melody.forEach((freq, i) => {
         const t = i * step;
-        if (freq > 0) this.tone(freq, step * 0.85, 'square', t, 0.03);
+        if (freq > 0) this.tone(freq, step * 0.5, 'triangle', t, 0.05);
         if (i % 4 === 0) this.tone(bass[i / 4], step * 3.6, 'triangle', t, 0.05);
-        if (i % 2 === 0) this.click(t, 0.01);
       });
       const totalDuration = melody.length * step;
       this.themeTimeout = setTimeout(scheduleLoop, totalDuration * 1000);

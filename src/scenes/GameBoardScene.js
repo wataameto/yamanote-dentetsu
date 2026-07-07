@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { STATIONS, CHUO_STATIONS } from '../stations.js';
 import { buildStationPositions } from '../layout.js';
-import { buildBoard, stepForward, getCell, mainLoopDistance } from '../board.js';
+import { buildBoard, stepForward, getCell } from '../board.js';
 import { buildProperties, stationIncome, isMonopoly, totalPropertyValue } from '../properties.js';
 import { CARD_DEFS, drawRandomCard } from '../cards.js';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
@@ -31,11 +31,16 @@ export class GameBoardScene extends Phaser.Scene {
     this.board = buildBoard();
     this.properties = buildProperties();
 
+    // 4人の初期位置は盤面上でバラバラになるよう均等に離す
+    const n = STATIONS.length;
+    const startStationIdx = [0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75)];
+    const startCells = startStationIdx.map((i) => this.board.stationCellIndex[i]);
+
     this.players = [
-      { id: 'you', name: 'あなた', emoji: '🐕', color: 0x4477ff, isCPU: false, cash: STARTING_CASH, pos: { onChuo: false, index: this.board.startCellIndex }, cards: [] },
-      { id: 'cpu1', name: 'CPU1', emoji: '🐱', color: 0xff6666, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: this.board.startCellIndex }, cards: [] },
-      { id: 'cpu2', name: 'CPU2', emoji: '🐰', color: 0x55bb55, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: this.board.startCellIndex }, cards: [] },
-      { id: 'cpu3', name: 'CPU3', emoji: '🐻', color: 0xbb77ee, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: this.board.startCellIndex }, cards: [] },
+      { id: 'you', name: 'あなた', emoji: '🐕', color: 0x4477ff, isCPU: false, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[0] }, cards: [] },
+      { id: 'cpu1', name: 'CPU1', emoji: '🐱', color: 0xff6666, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[1] }, cards: [] },
+      { id: 'cpu2', name: 'CPU2', emoji: '🐰', color: 0x55bb55, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[2] }, cards: [] },
+      { id: 'cpu3', name: 'CPU3', emoji: '🐻', color: 0xbb77ee, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[3] }, cards: [] },
     ];
     this.currentPlayerIndex = 0;
 
@@ -106,7 +111,7 @@ export class GameBoardScene extends Phaser.Scene {
       const p = points[i];
       const bg = drawRoundedButton(this, p.x, p.y, buttonWidth, buttonHeight, { strokeWidth: 2 });
       const nameText = this.add
-        .text(p.x, p.y, station.name, { fontFamily: FONT_FAMILY, fontSize: buttonHeight < 45 ? '14px' : '18px', color: '#000' })
+        .text(p.x, p.y, station.name, { fontFamily: FONT_FAMILY, fontSize: buttonHeight < 45 ? '16px' : '22px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(2);
       if (nameText.width > buttonWidth * 0.9) nameText.setScale((buttonWidth * 0.9) / nameText.width);
@@ -116,7 +121,7 @@ export class GameBoardScene extends Phaser.Scene {
       const p = chuoPoints[i];
       const bg = drawRoundedButton(this, p.x, p.y, buttonWidth, buttonHeight, { strokeColor: 0xf15a22, strokeWidth: 3 });
       const nameText = this.add
-        .text(p.x, p.y, station.name, { fontFamily: FONT_FAMILY, fontSize: buttonHeight < 45 ? '14px' : '18px', color: '#000' })
+        .text(p.x, p.y, station.name, { fontFamily: FONT_FAMILY, fontSize: buttonHeight < 45 ? '16px' : '22px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(2);
       if (nameText.width > buttonWidth * 0.9) nameText.setScale((buttonWidth * 0.9) / nameText.width);
@@ -201,28 +206,34 @@ export class GameBoardScene extends Phaser.Scene {
 
   drawHud() {
     const width = this.scale.width;
-    this.add.text(width / 2, 8, '山手線電鉄', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' }).setOrigin(0.5, 0);
-    this.dateText = this.add.text(width / 2, 34, '', { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#333' }).setOrigin(0.5, 0);
+    this.add.text(width / 2, 8, '山手線電鉄', { fontFamily: FONT_FAMILY, fontSize: '32px', color: '#000' }).setOrigin(0.5, 0);
+    this.dateText = this.add.text(width / 2, 48, '', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#333' }).setOrigin(0.5, 0);
 
+    const rowH = 32;
     this.playerCashTexts = this.players.map((p, i) =>
       this.add
-        .text(16, 8 + i * 22, '', { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#000' })
+        .text(16, 8 + i * rowH, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
         .setOrigin(0, 0)
     );
 
+    this.turnText = this.add
+      .text(16, 8 + this.players.length * rowH + 4, '', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#cc6600', fontStyle: 'bold' })
+      .setOrigin(0, 0);
+
     this.logText = this.add
-      .text(16, height_bottom(this) - 30, '', { fontFamily: FONT_FAMILY, fontSize: '13px', color: '#444' })
+      .text(16, height_bottom(this) - 30, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#444' })
       .setOrigin(0, 1);
 
-    this.rollButton = drawRoundedButton(this, width - 100, 40, 150, 48, { depth: 5 });
-    this.rollButtonText = this.add.text(width - 100, 40, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(7);
+    const diceY = 8 + this.players.length * rowH + 34 + 30;
+    this.rollButton = drawRoundedButton(this, 100, diceY, 170, 50, { depth: 5 });
+    this.rollButtonText = this.add.text(100, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' }).setOrigin(0.5).setDepth(7);
     this.rollButton.on('pointerdown', () => this.onRollClicked());
     this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(BUTTON_FILL_HOVER));
     this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(BUTTON_FILL));
 
     this.muteText = this.add
-      .text(width - 20, 74, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', { fontFamily: FONT_FAMILY, fontSize: '13px', color: '#555' })
-      .setOrigin(1, 0)
+      .text(16, diceY + 32, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#555' })
+      .setOrigin(0, 0)
       .setDepth(7)
       .setInteractive({ useHandCursor: true });
     this.muteText.on('pointerdown', () => {
@@ -239,10 +250,16 @@ export class GameBoardScene extends Phaser.Scene {
 
   updateHud() {
     this.dateText.setText(`${this.year}年目 ${this.month}月 / ぜんぶで${this.years}年 目的地: ${STATIONS[this.targetStationIndex].name}`);
+    const currentPlayer = this.players[this.currentPlayerIndex];
     this.players.forEach((p, i) => {
       const noraneko = this.noranekoOwnerId === p.id ? ' 🐈' : '';
-      this.playerCashTexts[i].setText(`${p.emoji}${p.name}: ¥${p.cash}${noraneko}`);
+      const isTurn = p.id === currentPlayer.id;
+      const prefix = isTurn ? '▶ ' : '　';
+      this.playerCashTexts[i].setText(`${prefix}${p.emoji}${p.name}: ¥${p.cash}${noraneko}`);
+      this.playerCashTexts[i].setColor(isTurn ? '#cc6600' : '#000');
+      this.playerCashTexts[i].setFontStyle(isTurn ? 'bold' : 'normal');
     });
+    this.turnText.setText(`▶ ${currentPlayer.emoji}${currentPlayer.name} の番!`);
     this.updateTargetMarker();
     this.refreshTokenPositions();
   }
@@ -255,6 +272,8 @@ export class GameBoardScene extends Phaser.Scene {
   refreshTurnUI() {
     this.destroyHand();
     const player = this.players[this.currentPlayerIndex];
+    this.checkTargetAtTurnStart(player);
+    this.updateHud();
     const isHuman = !player.isCPU;
     this.rollButton.setVisible(isHuman && !this.turnMoved && !this.gameOver);
     if (isHuman && !this.gameOver) this.renderHand(player);
@@ -273,11 +292,11 @@ export class GameBoardScene extends Phaser.Scene {
     const height = this.scale.height;
     const y = height - 60;
     if (player.cards.length === 0) {
-      const t = this.add.text(16, y, 'てもち カード: なし', { fontFamily: FONT_FAMILY, fontSize: '13px', color: '#777' }).setDepth(5);
+      const t = this.add.text(16, y, 'てもち カード: なし', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#777' }).setDepth(5);
       this.handContainer.push(t);
       return;
     }
-    const label = this.add.text(16, y - 22, 'てもちカード(クリックでつかう):', { fontFamily: FONT_FAMILY, fontSize: '12px', color: '#555' }).setDepth(5);
+    const label = this.add.text(16, y - 22, 'てもちカード(クリックでつかう):', { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#555' }).setDepth(5);
     this.handContainer.push(label);
     const cardW = 130;
     player.cards.forEach((cardId, i) => {
@@ -285,7 +304,7 @@ export class GameBoardScene extends Phaser.Scene {
       const bx = 16 + cardW / 2 + i * (cardW + 8);
       const btn = drawRoundedButton(this, bx, y, cardW, 40, { depth: 5 });
       const text = this.add
-        .text(bx, y, def.name, { fontFamily: FONT_FAMILY, fontSize: '12px', color: '#000' })
+        .text(bx, y, def.name, { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(7);
       btn.on('pointerdown', () => this.useCard(this.currentPlayerIndex, i));
@@ -299,75 +318,127 @@ export class GameBoardScene extends Phaser.Scene {
 
   onRollClicked() {
     if (this.turnMoved || this.gameOver) return;
-    this.sfx.diceRoll();
     const player = this.players[this.currentPlayerIndex];
-    this.maybeAskShortcutThenMove(player, 1);
+    this.rollAndChooseMove(player, 1);
   }
 
-  maybeAskShortcutThenMove(player, diceCount) {
-    if (!player.pos.onChuo && player.pos.index === this.board.shinjukuCellIndex) {
-      if (player.isCPU) {
-        this.doMovement(player, diceCount, Math.random() < 0.5);
-      } else {
-        this.showShortcutPrompt(player, diceCount);
-      }
-    } else {
-      this.doMovement(player, diceCount, false);
-    }
-  }
-
-  showShortcutPrompt(player, diceCount) {
-    const width = this.scale.width;
-    const height = this.scale.height;
-    const bg = this.add.rectangle(width / 2, height / 2, 420, 160, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(20);
-    const text = this.add
-      .text(width / 2, height / 2 - 40, '新宿駅: 中央線をつかいますか?', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
-      .setOrigin(0.5)
-      .setDepth(21);
-    const yesBtn = drawRoundedButton(this, width / 2 - 90, height / 2 + 30, 150, 48, { depth: 20 });
-    const yesText = this.add.text(width / 2 - 90, height / 2 + 30, 'つかう(近道)', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#000' }).setOrigin(0.5).setDepth(21);
-    const noBtn = drawRoundedButton(this, width / 2 + 90, height / 2 + 30, 150, 48, { depth: 20 });
-    const noText = this.add.text(width / 2 + 90, height / 2 + 30, 'そのまま進む', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#000' }).setOrigin(0.5).setDepth(21);
-    const cleanup = () => [bg, text, yesBtn.gfx, yesBtn.zone, yesText, noBtn.gfx, noBtn.zone, noText].forEach((o) => o.destroy());
-    yesBtn.on('pointerdown', () => {
-      cleanup();
-      this.sfx.shortcutJingle();
-      this.doMovement(player, diceCount, true);
-    });
-    noBtn.on('pointerdown', () => {
-      cleanup();
-      this.sfx.click();
-      this.doMovement(player, diceCount, false);
-    });
-  }
-
-  doMovement(player, diceCount, takeShortcut) {
+  // サイコロをふって、届く範囲の駅をすべて選択肢として出す(中央線ぶんきも選択肢に含む)
+  rollAndChooseMove(player, diceCount) {
     let steps = 0;
     for (let i = 0; i < diceCount; i++) steps += 1 + Math.floor(Math.random() * 6);
+    this.sfx.diceRoll();
     this.turnMoved = true;
     this.rollButton.setVisible(false);
+    this.log(`${player.name}は サイコロ${diceCount}個で ${steps}マスまで すすめる!`);
 
-    // 目的地を通り越さないよう、届く場合はそこでピタッと止める(余ったマスは使わない)
-    if (!takeShortcut && !player.pos.onChuo) {
-      const targetCellIndex = this.board.stationCellIndex[this.targetStationIndex];
-      const distToTarget = mainLoopDistance(this.board, player.pos.index, targetCellIndex);
-      if (distToTarget <= steps) steps = distToTarget;
+    const options = this.computeReachableOptions(player, steps);
+    if (player.isCPU) {
+      this.beginMove(player, this.cpuChooseOption(options));
+    } else {
+      this.showMoveChoiceModal(player, options);
     }
-
-    this.log(`${player.name}は サイコロ${diceCount}個で ${steps}マス すすむ!`);
-    this.animateSteps(player, steps, takeShortcut, 0);
   }
 
-  animateSteps(player, remaining, takeShortcut, stepDone) {
+  isTargetPos(pos) {
+    if (pos.onChuo) return false;
+    return pos.index === this.board.stationCellIndex[this.targetStationIndex];
+  }
+
+  // 現在地からNマスの範囲で止まれる駅を(中央線ぶんきも含めて)すべて列挙する
+  computeReachableOptions(player, totalSteps) {
+    const options = [];
+    let pos = { ...player.pos };
+    for (let s = 1; s <= totalSteps; s++) {
+      pos = stepForward(this.board, pos, false);
+      const cell = getCell(this.board, pos);
+      if (cell.type === 'station' && cell.stationIndex !== undefined) {
+        options.push({ label: STATIONS[cell.stationIndex].name, steps: s, pos: { ...pos }, shortcutAtStep: null });
+      }
+      if (!pos.onChuo && pos.index === this.board.shinjukuCellIndex && s < totalSteps) {
+        let chuoPos = pos;
+        for (let cs = s + 1; cs <= totalSteps; cs++) {
+          chuoPos = stepForward(this.board, chuoPos, cs === s + 1);
+          if (!chuoPos.onChuo) break; // 神田で本線に合流したらぶんき探索は打ち切り
+          const chuoCell = getCell(this.board, chuoPos);
+          if (chuoCell.type === 'station' && chuoCell.chuoIndex !== undefined) {
+            options.push({
+              label: CHUO_STATIONS[chuoCell.chuoIndex].name,
+              steps: cs,
+              pos: { ...chuoPos },
+              shortcutAtStep: s + 1,
+              viaChuo: true,
+            });
+          }
+        }
+      }
+    }
+    if (!options.some((o) => o.steps === totalSteps)) {
+      options.push({ label: `そのまま進む`, steps: totalSteps, pos: { ...pos }, shortcutAtStep: null, isFullRoll: true });
+    }
+    return options;
+  }
+
+  cpuChooseOption(options) {
+    const targetOpt = options.find((o) => this.isTargetPos(o.pos));
+    if (targetOpt) return targetOpt;
+    return options.reduce((best, o) => (o.steps > best.steps ? o : best), options[0]);
+  }
+
+  showMoveChoiceModal(player, options) {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const cols = options.length > 6 ? 2 : 1;
+    const rows = Math.ceil(options.length / cols);
+    const rowH = 50;
+    const panelH = 110 + rows * rowH;
+    const panelW = cols === 2 ? 620 : 400;
+    const objs = [];
+    const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(20);
+    objs.push(bg);
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 26, 'どこまで すすむ?', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' })
+        .setOrigin(0.5)
+        .setDepth(21)
+    );
+    options.forEach((opt, i) => {
+      const col = Math.floor(i / rows);
+      const row = i % rows;
+      const bx = width / 2 + (cols === 2 ? (col === 0 ? -155 : 155) : 0);
+      const by = height / 2 - panelH / 2 + 66 + row * rowH;
+      const btnW = cols === 2 ? 290 : 360;
+      const btn = drawRoundedButton(this, bx, by, btnW, 42, { depth: 20 });
+      const label = opt.isFullRoll
+        ? `そのまま進む(${opt.steps}マス)`
+        : `${opt.label}(${opt.steps}マス)${opt.viaChuo ? ' 🚃中央線' : ''}`;
+      const text = this.add.text(bx, by, label, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(21);
+      objs.push(btn.gfx, btn.zone, text);
+      btn.on('pointerdown', () => {
+        objs.forEach((o) => o.destroy());
+        this.sfx.click();
+        this.beginMove(player, opt);
+      });
+      btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
+      btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
+    });
+  }
+
+  beginMove(player, chosen) {
+    this.log(`${player.name}は ${chosen.isFullRoll ? 'そのまま' : chosen.label + 'へ'} すすむ!(${chosen.steps}マス)`);
+    if (chosen.shortcutAtStep) this.sfx.shortcutJingle();
+    this.animateSteps(player, chosen.steps, chosen.shortcutAtStep, 0);
+  }
+
+  animateSteps(player, remaining, shortcutAtStep, stepDone) {
     if (remaining <= 0) {
       this.time.delayedCall(150, () => this.resolveCell(player));
       return;
     }
-    const useShortcut = stepDone === 0 ? takeShortcut : false;
+    const useShortcut = stepDone + 1 === shortcutAtStep;
     player.pos = stepForward(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.time.delayedCall(90, () => this.animateSteps(player, remaining - 1, takeShortcut, stepDone + 1));
+    this.time.delayedCall(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepDone + 1));
   }
 
   resolveCell(player) {
@@ -453,7 +524,7 @@ export class GameBoardScene extends Phaser.Scene {
       this.add
         .text(width / 2, height / 2 - panelH / 2 + 18, `${STATIONS[stationIndex].name}駅 の物件`, {
           fontFamily: FONT_FAMILY,
-          fontSize: '18px',
+          fontSize: '22px',
           color: '#000',
         })
         .setOrigin(0.5)
@@ -466,14 +537,14 @@ export class GameBoardScene extends Phaser.Scene {
       const ownerLabel = owned ? (prop.ownerId === player.id ? '(所有中)' : `(${ownerPlayer.name}が所有)`) : '';
       objs.push(
         this.add
-          .text(width / 2 - 200, ry, `${prop.name} ¥${prop.price} ${ownerLabel}`, { fontFamily: FONT_FAMILY, fontSize: '13px', color: owned ? '#999' : '#000' })
+          .text(width / 2 - 200, ry, `${prop.name} ¥${prop.price} ${ownerLabel}`, { fontFamily: FONT_FAMILY, fontSize: '17px', color: owned ? '#999' : '#000' })
           .setOrigin(0, 0.5)
           .setDepth(21)
       );
       if (!owned) {
         const canAfford = player.cash >= prop.price;
         const btn = drawRoundedButton(this, width / 2 + 160, ry, 100, 34, { depth: 20, fillColor: canAfford ? BUTTON_FILL : 0xe6e0d4 });
-        const btnText = this.add.text(width / 2 + 160, ry, '買う', { fontFamily: FONT_FAMILY, fontSize: '13px', color: canAfford ? '#000' : '#999' }).setOrigin(0.5).setDepth(21);
+        const btnText = this.add.text(width / 2 + 160, ry, '買う', { fontFamily: FONT_FAMILY, fontSize: '17px', color: canAfford ? '#000' : '#999' }).setOrigin(0.5).setDepth(21);
         objs.push(btn.gfx, btn.zone, btnText);
         if (canAfford) {
           btn.on('pointerdown', () => {
@@ -491,7 +562,7 @@ export class GameBoardScene extends Phaser.Scene {
       }
     });
     const closeBtn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 26, 140, 40, { depth: 20 });
-    const closeText = this.add.text(width / 2, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#000' }).setOrigin(0.5).setDepth(21);
+    const closeText = this.add.text(width / 2, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(21);
     objs.push(closeBtn.gfx, closeBtn.zone, closeText);
     const cleanup = () => objs.forEach((o) => o.destroy());
     closeBtn.on('pointerdown', () => {
@@ -505,18 +576,33 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   handleTargetArrival(player) {
+    this.awardTargetArrival(player);
+    this.afterCellResolved(player);
+  }
+
+  // 目的地にいる状態でターンが回ってきた(=最初に行動しようとした)プレイヤーがゴール扱いになる
+  checkTargetAtTurnStart(player) {
+    if (this.gameOver) return;
+    if (player.pos.onChuo) return;
+    if (player.pos.index !== this.board.stationCellIndex[this.targetStationIndex]) return;
+    this.awardTargetArrival(player);
+  }
+
+  awardTargetArrival(player) {
     const bonus = Math.round(800 + this.year * 150);
     player.cash += bonus;
     this.log(`🎉 ${player.name}が目的地「${STATIONS[this.targetStationIndex].name}」に一番乗り! +¥${bonus}`);
     this.sfx.goal();
 
-    // ノラネコ: 目的地から一番遠いプレイヤーに居着く
+    // ノラネコ: 目的地から一番遠いプレイヤーに居着く(到着した本人は距離0=対象外)
     const oldTargetIdx = this.targetStationIndex;
+    const targetCellIdx = this.board.stationCellIndex[oldTargetIdx];
+    const len = this.board.mainLoop.length;
     let farthestIdx = 0;
     let farthestDist = -1;
     this.players.forEach((p, i) => {
       const cellIdx = p.pos.onChuo ? this.board.shinjukuCellIndex : p.pos.index;
-      const d = mainLoopDistance(this.board, this.board.stationCellIndex[oldTargetIdx], cellIdx);
+      const d = (cellIdx - targetCellIdx + len) % len;
       if (d > farthestDist) {
         farthestDist = d;
         farthestIdx = i;
@@ -531,16 +617,13 @@ export class GameBoardScene extends Phaser.Scene {
 
     this.targetStationIndex = this.pickNewTarget();
     this.updateHud();
-    this.afterCellResolved(player);
   }
 
   pickNewTarget() {
-    // 品川はスタート地点(全員が最初からいる/ふりだしで戻る駅)なので目的地には選ばない
-    const startStationIndex = STATIONS.findIndex((s) => s.name === '品川');
     let idx;
     do {
       idx = Math.floor(Math.random() * STATIONS.length);
-    } while (idx === this.targetStationIndex || idx === startStationIndex);
+    } while (idx === this.targetStationIndex);
     return idx;
   }
 
@@ -578,7 +661,7 @@ export class GameBoardScene extends Phaser.Scene {
       this.destroyHand();
       this.log(`${player.name}は「${def.name}」をつかった!`);
       this.sfx.useCard();
-      this.maybeAskShortcutThenMove(player, def.diceCount);
+      this.rollAndChooseMove(player, def.diceCount);
       return;
     }
 
@@ -713,25 +796,25 @@ export class GameBoardScene extends Phaser.Scene {
     const panelH = 210 + results.length * 26;
     const bg = this.add.rectangle(width / 2, height / 2, 480, panelH, 0xffffff, 0.98).setStrokeStyle(4, ACCENT_STROKE).setDepth(30);
     this.add
-      .text(width / 2, height / 2 - panelH / 2 + 34, `🏁 ${this.years}年目 しゅうりょう!`, { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' })
+      .text(width / 2, height / 2 - panelH / 2 + 34, `🏁 ${this.years}年目 しゅうりょう!`, { fontFamily: FONT_FAMILY, fontSize: '26px', color: '#000' })
       .setOrigin(0.5)
       .setDepth(31);
     this.add
-      .text(width / 2, height / 2 - panelH / 2 + 74, `優勝: ${winner.emoji} ${winner.name}!`, { fontFamily: FONT_FAMILY, fontSize: '26px', color: '#cc8800', fontStyle: 'bold' })
+      .text(width / 2, height / 2 - panelH / 2 + 74, `優勝: ${winner.emoji} ${winner.name}!`, { fontFamily: FONT_FAMILY, fontSize: '30px', color: '#cc8800', fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(31);
     results.forEach((r, i) => {
       this.add
         .text(width / 2, height / 2 - panelH / 2 + 114 + i * 26, `${i + 1}位  ${r.p.emoji}${r.p.name}: 総資産 ¥${r.total}`, {
           fontFamily: FONT_FAMILY,
-          fontSize: '16px',
+          fontSize: '19px',
           color: '#000',
         })
         .setOrigin(0.5)
         .setDepth(31);
     });
     const btn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 40, 200, 50, { depth: 30 });
-    const btnText = this.add.text(width / 2, height / 2 + panelH / 2 - 40, 'タイトルへ', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(31);
+    const btnText = this.add.text(width / 2, height / 2 + panelH / 2 - 40, 'タイトルへ', { fontFamily: FONT_FAMILY, fontSize: '19px', color: '#000' }).setOrigin(0.5).setDepth(31);
     btn.on('pointerdown', () => this.scene.start('TitleScene'));
     btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
     btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
@@ -753,6 +836,6 @@ export class GameBoardScene extends Phaser.Scene {
     if (attackIdx !== -1 && Math.random() < 0.2) {
       this.useCard(this.currentPlayerIndex, attackIdx);
     }
-    this.maybeAskShortcutThenMove(player, 1);
+    this.rollAndChooseMove(player, 1);
   }
 }
