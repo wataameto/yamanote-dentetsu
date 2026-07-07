@@ -281,13 +281,13 @@ export class GameBoardScene extends Phaser.Scene {
       if (prevBtn) prevBtn.bg.setFillStyle(BUTTON_FILL);
     }
     const btn = this.stationButtons[this.targetStationIndex];
-    if (btn) btn.bg.setFillStyle(0xffd54f);
+    if (btn) btn.bg.setFillStyle(0xff7043);
     this.currentTargetButtonIdx = this.targetStationIndex;
 
-    // 駅間隔が狭い場所でも隣の駅と重ならないよう、ボタン右上の小バッジ位置に出す
+    // 駅間隔が狭い場所でも隣の駅と重ならないよう、ボタン右上の小バッジ位置に出す(サイコロと色がかぶらないよう内側寄りに)
     const p = this.layout.points[this.targetStationIndex];
-    const x = p.x + this.layout.buttonWidth / 2 - 6;
-    const y = p.y - this.layout.buttonHeight / 2 - 6;
+    const x = p.x + this.layout.buttonWidth / 2 - 16;
+    const y = p.y - this.layout.buttonHeight / 2 + 2;
     this.targetMarker.setPosition(x, y).setVisible(true);
 
     if (this.targetMarkerTween) this.targetMarkerTween.stop();
@@ -322,12 +322,14 @@ export class GameBoardScene extends Phaser.Scene {
     const chuoTop = Math.min(chuoPoints[0].y, chuoPoints[1].y) - buttonHeight / 2;
     const chuoBottom = Math.max(chuoPoints[0].y, chuoPoints[1].y) + buttonHeight / 2;
     const bottomBandTop = Math.max(points[osakiIdx].y, points[takanawaIdx].y) - buttonHeight / 2;
-    const logY = Math.min(points[gotandaIdx].y, points[tamachiIdx].y);
+    const logY = Math.min(points[gotandaIdx].y, points[tamachiIdx].y) - 10;
 
     const rowH = 30;
     const listH = this.players.length * rowH;
     const topBandH = chuoTop - topBandBottom;
-    const listTop = topBandBottom + (topBandH - listH) / 2;
+    // プレイヤー一覧+サイコロのまとまりを、中央揃えよりも少し上寄りに配置する
+    const UP_SHIFT = 36;
+    const listTop = topBandBottom + (topBandH - listH) / 2 - UP_SHIFT;
 
     // 手番は一覧の▶マークで示すので、別枠の「〜の番!」表示は出さない
     this.playerCashTexts = this.players.map((p, i) =>
@@ -336,10 +338,17 @@ export class GameBoardScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
     );
 
-    // 五反田・田町の高さ(=大崎/高輪ゲートウェイのひとつ上の行)、盤面中央の空きスペースにメッセージ表示欄を置く
+    // 五反田・田町の高さ(=大崎/高輪ゲートウェイのひとつ上の行)、盤面中央の空きスペースにメッセージ表示欄を置く。
+    // 下端をそろえたまま、長いメッセージは複数行に折り返して上に伸びるようにする。
     this.logText = this.add
-      .text(centerX, logY, '', { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#444' })
-      .setOrigin(0.5, 0.5);
+      .text(centerX, logY, '', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '17px',
+        color: '#444',
+        align: 'center',
+        wordWrap: { width: 380, useAdvancedWrap: true },
+      })
+      .setOrigin(0.5, 1);
 
     // サイコロボタンはプレイヤー一覧のすぐ下(四ツ谷/御茶ノ水より上)に置き、
     // 駅ボタンと見分けがつくよう金色のピル型+パルス演出で目立たせる
@@ -349,13 +358,13 @@ export class GameBoardScene extends Phaser.Scene {
     const diceY = listBottom + diceGap / 2;
     this.rollButton = drawRoundedButton(this, centerX, diceY, 200, diceH, {
       depth: 5,
-      fillColor: 0xffd34d,
-      strokeColor: 0xdd6600,
+      fillColor: 0x4fc3f7,
+      strokeColor: 0x0277bd,
       strokeWidth: 4,
       radius: diceH / 2,
     });
     this.rollButtonText = this.add
-      .text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#663300', fontStyle: 'bold' })
+      .text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#003a5c', fontStyle: 'bold' })
       .setOrigin(0.5)
       .setDepth(7);
     this.tweens.add({
@@ -367,8 +376,8 @@ export class GameBoardScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
     this.rollButton.on('pointerdown', () => this.onRollClicked());
-    this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(0xffe28a));
-    this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(0xffd34d));
+    this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(0x81d4fa));
+    this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(0x4fc3f7));
     this.diceY = diceY;
     this.diceH = diceH;
     this.centerX = centerX;
