@@ -382,8 +382,9 @@ export class GameBoardScene extends Phaser.Scene {
     return pos;
   }
 
-  // 現在地から出目ぶん進んだ先を、反時計回り/時計回り/(分岐点なら)中央線の
-  // 最大3方向ぶん計算する。行けない方向は選択肢に出さない。
+  // 現在地から出目ぶん進んだ先を、反時計回り/時計回り/中央線の方向ぶん計算する。
+  // 中央線は、いま乗っている駅が新宿/神田そのものの場合だけでなく、その方向に
+  // 進む途中で新宿/神田を通過する場合も分岐先として選べるようにする。
   computeDirectionOptions(player, totalSteps) {
     const options = [];
 
@@ -407,29 +408,44 @@ export class GameBoardScene extends Phaser.Scene {
       stepFn: 'backward',
     });
 
-    if (!player.pos.onChuo && player.pos.index === this.board.shinjukuCellIndex) {
-      const chuoPos = this.simulatePath(player.pos, totalSteps, stepForward, 1);
-      options.push({
-        direction: 'chuo',
-        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
-        steps: totalSteps,
-        pos: chuoPos,
-        shortcutAtStep: 1,
-        stepFn: 'forward',
-      });
-    } else if (!player.pos.onChuo && player.pos.index === this.board.kandaCellIndex) {
-      const chuoPos = this.simulatePath(player.pos, totalSteps, stepBackward, 1);
-      options.push({
-        direction: 'chuo',
-        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
-        steps: totalSteps,
-        pos: chuoPos,
-        shortcutAtStep: 1,
-        stepFn: 'backward',
-      });
-    }
+    const ccwChuo = this.findChuoBranch(player.pos, totalSteps, stepForward, this.board.shinjukuCellIndex, 'forward');
+    if (ccwChuo) options.push(ccwChuo);
+    const cwChuo = this.findChuoBranch(player.pos, totalSteps, stepBackward, this.board.kandaCellIndex, 'backward');
+    if (cwChuo) options.push(cwChuo);
 
     return options;
+  }
+
+  // startPosからstepFn方向にtotalStepsぶん進む間にjunctionCellIndex(新宿 or 神田)を
+  // 通るなら、そこで中央線に入った場合の行き先を返す。通らないならnull。
+  findChuoBranch(startPos, totalSteps, stepFn, junctionCellIndex, stepFnName) {
+    if (!startPos.onChuo && startPos.index === junctionCellIndex) {
+      const chuoPos = this.simulatePath(startPos, totalSteps, stepFn, 1);
+      return {
+        direction: 'chuo',
+        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
+        steps: totalSteps,
+        pos: chuoPos,
+        shortcutAtStep: 1,
+        stepFn: stepFnName,
+      };
+    }
+    let pos = { ...startPos };
+    for (let s = 1; s < totalSteps; s++) {
+      pos = stepFn(this.board, pos, false);
+      if (!pos.onChuo && pos.index === junctionCellIndex) {
+        const chuoPos = this.simulatePath(startPos, totalSteps, stepFn, s + 1);
+        return {
+          direction: 'chuo',
+          label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
+          steps: totalSteps,
+          pos: chuoPos,
+          shortcutAtStep: s + 1,
+          stepFn: stepFnName,
+        };
+      }
+    }
+    return null;
   }
 
   cpuChooseOption(options) {
@@ -451,23 +467,48 @@ export class GameBoardScene extends Phaser.Scene {
     objs.push(bg);
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 26, 'どっちに すすむ?', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' })
+        .text(width / 2, height / 2 - panelH / 2 + 26, 'どっちに すすむ?(矢印キーもOK)', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(21)
     );
+
+    const KEY_HINT = { ccw: '↑', cw: '↓', chuo: '←/→' };
+    const chuoOpts = options.filter((o) => o.direction === 'chuo');
+    const keyForOption = (opt) => {
+      if (opt.direction !== 'chuo') return KEY_HINT[opt.direction];
+      const i = chuoOpts.indexOf(opt);
+      return chuoOpts.length > 1 ? (i === 0 ? '←' : '→') : '←/→';
+    };
+
     options.forEach((opt, i) => {
       const by = height / 2 - panelH / 2 + 70 + i * rowH;
       const btn = drawRoundedButton(this, width / 2, by, 360, 44, { depth: 20 });
-      const text = this.add.text(width / 2, by, opt.label, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(21);
+      const text = this.add
+        .text(width / 2, by, `[${keyForOption(opt)}] ${opt.label}`, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
+        .setOrigin(0.5)
+        .setDepth(21);
       objs.push(btn.gfx, btn.zone, text);
-      btn.on('pointerdown', () => {
-        objs.forEach((o) => o.destroy());
-        this.sfx.click();
-        this.beginMove(player, opt);
-      });
+      btn.on('pointerdown', () => choose(opt));
       btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
       btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
     });
+
+    const onKeyDown = (event) => {
+      let opt = null;
+      if (event.code === 'ArrowUp') opt = options.find((o) => o.direction === 'ccw');
+      else if (event.code === 'ArrowDown') opt = options.find((o) => o.direction === 'cw');
+      else if (event.code === 'ArrowLeft') opt = chuoOpts[0];
+      else if (event.code === 'ArrowRight') opt = chuoOpts[1] || chuoOpts[0];
+      if (opt) choose(opt);
+    };
+    this.input.keyboard.on('keydown', onKeyDown);
+
+    const choose = (opt) => {
+      this.input.keyboard.off('keydown', onKeyDown);
+      objs.forEach((o) => o.destroy());
+      this.sfx.click();
+      this.beginMove(player, opt);
+    };
   }
 
   beginMove(player, chosen) {
