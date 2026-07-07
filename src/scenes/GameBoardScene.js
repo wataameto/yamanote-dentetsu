@@ -241,22 +241,24 @@ export class GameBoardScene extends Phaser.Scene {
 
     const bottomBandH = bottomBandTop - chuoBottom;
     const diceH = 56;
-    const muteH = 20;
-    const muteGap = 10;
-    const diceY = chuoBottom + (bottomBandH - (diceH + muteGap + muteH)) / 2 + diceH / 2;
+    const diceY = chuoBottom + diceH / 2 + 12;
     this.rollButton = drawRoundedButton(this, centerX, diceY, 190, diceH, { depth: 5 });
     this.rollButtonText = this.add.text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' }).setOrigin(0.5).setDepth(7);
     this.rollButton.on('pointerdown', () => this.onRollClicked());
     this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(BUTTON_FILL_HOVER));
     this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(BUTTON_FILL));
+    this.diceY = diceY;
+    this.diceH = diceH;
+    this.centerX = centerX;
+    this.bottomBandTop = bottomBandTop;
 
     this.muteText = this.add
-      .text(centerX, diceY + diceH / 2 + muteGap, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', {
+      .text(width - 16, 8, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', {
         fontFamily: FONT_FAMILY,
         fontSize: '14px',
         color: '#555',
       })
-      .setOrigin(0.5, 0)
+      .setOrigin(1, 0)
       .setDepth(7)
       .setInteractive({ useHandCursor: true });
     this.muteText.on('pointerdown', () => {
@@ -307,20 +309,28 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   renderHand(player) {
-    const width = this.scale.width;
-    const height = this.scale.height;
-    const y = height - 60;
+    const centerX = this.centerX;
+    const labelY = this.diceY + this.diceH / 2 + 18;
+    const y = labelY + 26;
     if (player.cards.length === 0) {
-      const t = this.add.text(16, y, 'てもち カード: なし', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#777' }).setDepth(5);
+      const t = this.add
+        .text(centerX, labelY, 'てもち カード: なし', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#777' })
+        .setOrigin(0.5, 0)
+        .setDepth(5);
       this.handContainer.push(t);
       return;
     }
-    const label = this.add.text(16, y - 22, 'てもちカード(クリックでつかう):', { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#555' }).setDepth(5);
+    const label = this.add
+      .text(centerX, labelY, 'てもちカード(クリックでつかう):', { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#555' })
+      .setOrigin(0.5, 0)
+      .setDepth(5);
     this.handContainer.push(label);
     const cardW = 130;
+    const totalW = player.cards.length * cardW + (player.cards.length - 1) * 8;
+    const startX = centerX - totalW / 2 + cardW / 2;
     player.cards.forEach((cardId, i) => {
       const def = CARD_DEFS[cardId];
-      const bx = 16 + cardW / 2 + i * (cardW + 8);
+      const bx = startX + i * (cardW + 8);
       const btn = drawRoundedButton(this, bx, y, cardW, 40, { depth: 5 });
       const text = this.add
         .text(bx, y, def.name, { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#000' })
@@ -355,7 +365,7 @@ export class GameBoardScene extends Phaser.Scene {
     if (player.isCPU) {
       this.beginMove(player, this.cpuChooseOption(options));
     } else {
-      this.showMoveChoiceModal(player, options);
+      this.showMoveChoiceModal(player, options, diceCount, steps);
     }
   }
 
@@ -487,18 +497,29 @@ export class GameBoardScene extends Phaser.Scene {
     return options.find((o) => o.direction === 'ccw');
   }
 
-  showMoveChoiceModal(player, options) {
+  showMoveChoiceModal(player, options, diceCount, steps) {
     const width = this.scale.width;
     const height = this.scale.height;
     const rowH = 54;
-    const panelH = 110 + options.length * rowH;
+    const panelH = 140 + options.length * rowH;
     const panelW = 420;
     const objs = [];
     const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(20);
     objs.push(bg);
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 26, 'どっちに すすむ?(矢印キーもOK)', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
+        .text(width / 2, height / 2 - panelH / 2 + 24, `🎲 サイコロ${diceCount}個で ${steps}マス すすむ!`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '20px',
+          color: '#cc6600',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(21)
+    );
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 56, 'どっちに すすむ?(矢印キーもOK)', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(21)
     );
@@ -506,7 +527,7 @@ export class GameBoardScene extends Phaser.Scene {
     const KEY_ARROW = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 
     options.forEach((opt, i) => {
-      const by = height / 2 - panelH / 2 + 70 + i * rowH;
+      const by = height / 2 - panelH / 2 + 100 + i * rowH;
       const btn = drawRoundedButton(this, width / 2, by, 360, 44, { depth: 20 });
       const text = this.add
         .text(width / 2, by, `[${KEY_ARROW[opt.key] || '?'}] ${opt.label}`, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
