@@ -195,11 +195,31 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   updateTargetMarker() {
+    // 前の目的地の駅は色を戻し、新しい目的地は派手な色にして目立たせる
+    if (this.currentTargetButtonIdx !== undefined && this.currentTargetButtonIdx !== this.targetStationIndex) {
+      const prevBtn = this.stationButtons[this.currentTargetButtonIdx];
+      if (prevBtn) prevBtn.bg.setFillStyle(BUTTON_FILL);
+    }
+    const btn = this.stationButtons[this.targetStationIndex];
+    if (btn) btn.bg.setFillStyle(0xffd54f);
+    this.currentTargetButtonIdx = this.targetStationIndex;
+
     // 駅間隔が狭い場所でも隣の駅と重ならないよう、ボタン右上の小バッジ位置に出す
     const p = this.layout.points[this.targetStationIndex];
     const x = p.x + this.layout.buttonWidth / 2 - 6;
     const y = p.y - this.layout.buttonHeight / 2 - 6;
     this.targetMarker.setPosition(x, y).setVisible(true);
+
+    if (this.targetMarkerTween) this.targetMarkerTween.stop();
+    this.targetMarker.setScale(1);
+    this.targetMarkerTween = this.tweens.add({
+      targets: this.targetMarker,
+      scale: 1.35,
+      duration: 450,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
   }
 
   // ---------- HUD ----------
@@ -376,11 +396,13 @@ export class GameBoardScene extends Phaser.Scene {
 
   cellLabel(cell) {
     if (cell.type === 'station') {
-      return cell.stationIndex !== undefined ? STATIONS[cell.stationIndex].name : CHUO_STATIONS[cell.chuoIndex].name;
+      const name = cell.stationIndex !== undefined ? STATIONS[cell.stationIndex].name : CHUO_STATIONS[cell.chuoIndex].name;
+      return `🚉${name}`;
     }
-    if (cell.type === 'blue') return '青マス';
-    if (cell.type === 'red') return '赤マス';
-    if (cell.type === 'card') return 'カードマス';
+    // マス(駅ではない)は色つきの丸アイコンをつけて駅名と見分けやすくする
+    if (cell.type === 'blue') return '🔵青マス';
+    if (cell.type === 'red') return '🔴赤マス';
+    if (cell.type === 'card') return '🟡カードマス';
     return '';
   }
 
@@ -489,12 +511,37 @@ export class GameBoardScene extends Phaser.Scene {
     return null;
   }
 
+  // 中央線をはさむ経路の距離は、新宿/神田どちら経由で本線に戻るかの近似で見積もる
+  approxDistanceToTarget(pos, depth = 0) {
+    const targetCell = this.board.stationCellIndex[this.targetStationIndex];
+    const len = this.board.mainLoop.length;
+    if (!pos.onChuo) {
+      const fwd = (targetCell - pos.index + len) % len;
+      const bwd = (pos.index - targetCell + len) % len;
+      return Math.min(fwd, bwd);
+    }
+    if (depth > 0) return this.board.chuoPath.length; // 無限再帰防止のフォールバック
+    const toKanda = this.board.chuoPath.length - pos.index;
+    const toShinjuku = pos.index + 1;
+    const viaKanda = toKanda + this.approxDistanceToTarget({ onChuo: false, index: this.board.kandaCellIndex }, depth + 1);
+    const viaShinjuku = toShinjuku + this.approxDistanceToTarget({ onChuo: false, index: this.board.shinjukuCellIndex }, depth + 1);
+    return Math.min(viaKanda, viaShinjuku);
+  }
+
   cpuChooseOption(options) {
     const targetOpt = options.find((o) => this.isTargetPos(o.pos));
     if (targetOpt) return targetOpt;
-    const chuoOpt = options.find((o) => o.direction === 'chuo');
-    if (chuoOpt && Math.random() < 0.4) return chuoOpt;
-    return options.find((o) => o.direction === 'ccw');
+    // 目的地に一番近づく方向を選ぶ(反時計回り/時計回り/中央線を距離で比較)
+    let best = options[0];
+    let bestDist = this.approxDistanceToTarget(best.pos);
+    for (let i = 1; i < options.length; i++) {
+      const d = this.approxDistanceToTarget(options[i].pos);
+      if (d < bestDist) {
+        best = options[i];
+        bestDist = d;
+      }
+    }
+    return best;
   }
 
   showMoveChoiceModal(player, options, diceCount, steps) {
