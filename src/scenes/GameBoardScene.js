@@ -18,7 +18,7 @@ const TOKEN_OFFSETS = [
   { x: 14, y: 14 },
 ];
 // 「はやさ」レベル(1〜10)ごとの、1マス分の移動アニメにかける秒数。数字が小さいほど短い(はやい)。
-const STEP_SECONDS_TABLE = [0.12, 0.16, 0.2, 0.25, 0.3, 0.38, 0.46, 0.55, 0.68, 0.85];
+const STEP_SECONDS_TABLE = [0.2, 0.28, 0.36, 0.45, 0.55, 0.68, 0.82, 1.0, 1.2, 1.5];
 
 export class GameBoardScene extends Phaser.Scene {
   constructor() {
