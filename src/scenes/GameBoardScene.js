@@ -382,12 +382,25 @@ export class GameBoardScene extends Phaser.Scene {
     return pos;
   }
 
+  // fromPos→toPosの画面上の向きから、対応する矢印キーを求める
+  // (盤面はループなので、反時計回り/時計回りが上下左右のどれに対応するかは
+  // 場所によって変わる。駒込や品川のような区間では左右になる)。
+  arrowKeyForStep(fromPos, toPos) {
+    const p0 = this.cellPixelPos(fromPos);
+    const p1 = this.cellPixelPos(toPos);
+    const dx = p1.x - p0.x;
+    const dy = p1.y - p0.y;
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'ArrowRight' : 'ArrowLeft';
+    return dy > 0 ? 'ArrowDown' : 'ArrowUp';
+  }
+
   // 現在地から出目ぶん進んだ先を、反時計回り/時計回り/中央線の方向ぶん計算する。
   // 中央線は、いま乗っている駅が新宿/神田そのものの場合だけでなく、その方向に
   // 進む途中で新宿/神田を通過する場合も分岐先として選べるようにする。
   computeDirectionOptions(player, totalSteps) {
     const options = [];
 
+    const ccwFirstStep = stepForward(this.board, player.pos, false);
     const ccwPos = this.simulatePath(player.pos, totalSteps, stepForward, null);
     options.push({
       direction: 'ccw',
@@ -396,8 +409,10 @@ export class GameBoardScene extends Phaser.Scene {
       pos: ccwPos,
       shortcutAtStep: null,
       stepFn: 'forward',
+      key: this.arrowKeyForStep(player.pos, ccwFirstStep),
     });
 
+    const cwFirstStep = stepBackward(this.board, player.pos, false);
     const cwPos = this.simulatePath(player.pos, totalSteps, stepBackward, null);
     options.push({
       direction: 'cw',
@@ -406,11 +421,16 @@ export class GameBoardScene extends Phaser.Scene {
       pos: cwPos,
       shortcutAtStep: null,
       stepFn: 'backward',
+      key: this.arrowKeyForStep(player.pos, cwFirstStep),
     });
 
-    const ccwChuo = this.findChuoBranch(player.pos, totalSteps, stepForward, this.board.shinjukuCellIndex, 'forward');
-    if (ccwChuo) options.push(ccwChuo);
-    const cwChuo = this.findChuoBranch(player.pos, totalSteps, stepBackward, this.board.kandaCellIndex, 'backward');
+    const usedKeys = new Set(options.map((o) => o.key));
+    const ccwChuo = this.findChuoBranch(player.pos, totalSteps, stepForward, this.board.shinjukuCellIndex, 'forward', usedKeys);
+    if (ccwChuo) {
+      options.push(ccwChuo);
+      usedKeys.add(ccwChuo.key);
+    }
+    const cwChuo = this.findChuoBranch(player.pos, totalSteps, stepBackward, this.board.kandaCellIndex, 'backward', usedKeys);
     if (cwChuo) options.push(cwChuo);
 
     return options;
@@ -418,7 +438,16 @@ export class GameBoardScene extends Phaser.Scene {
 
   // startPosからstepFn方向にtotalStepsぶん進む間にjunctionCellIndex(新宿 or 神田)を
   // 通るなら、そこで中央線に入った場合の行き先を返す。通らないならnull。
-  findChuoBranch(startPos, totalSteps, stepFn, junctionCellIndex, stepFnName) {
+  findChuoBranch(startPos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys) {
+    const junctionPos = { onChuo: false, index: junctionCellIndex };
+    const chuoEntryPos = stepFn(this.board, junctionPos, true);
+    let key = this.arrowKeyForStep(junctionPos, chuoEntryPos);
+    if (usedKeys && usedKeys.has(key)) {
+      // 上下左右のどれかが既に使われていたら、空いている軸にずらす
+      const fallback = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].find((k) => !usedKeys.has(k));
+      key = fallback || key;
+    }
+
     if (!startPos.onChuo && startPos.index === junctionCellIndex) {
       const chuoPos = this.simulatePath(startPos, totalSteps, stepFn, 1);
       return {
@@ -428,6 +457,7 @@ export class GameBoardScene extends Phaser.Scene {
         pos: chuoPos,
         shortcutAtStep: 1,
         stepFn: stepFnName,
+        key,
       };
     }
     let pos = { ...startPos };
@@ -442,6 +472,7 @@ export class GameBoardScene extends Phaser.Scene {
           pos: chuoPos,
           shortcutAtStep: s + 1,
           stepFn: stepFnName,
+          key,
         };
       }
     }
@@ -472,19 +503,13 @@ export class GameBoardScene extends Phaser.Scene {
         .setDepth(21)
     );
 
-    const KEY_HINT = { ccw: '↑', cw: '↓', chuo: '←/→' };
-    const chuoOpts = options.filter((o) => o.direction === 'chuo');
-    const keyForOption = (opt) => {
-      if (opt.direction !== 'chuo') return KEY_HINT[opt.direction];
-      const i = chuoOpts.indexOf(opt);
-      return chuoOpts.length > 1 ? (i === 0 ? '←' : '→') : '←/→';
-    };
+    const KEY_ARROW = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
 
     options.forEach((opt, i) => {
       const by = height / 2 - panelH / 2 + 70 + i * rowH;
       const btn = drawRoundedButton(this, width / 2, by, 360, 44, { depth: 20 });
       const text = this.add
-        .text(width / 2, by, `[${keyForOption(opt)}] ${opt.label}`, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
+        .text(width / 2, by, `[${KEY_ARROW[opt.key] || '?'}] ${opt.label}`, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(21);
       objs.push(btn.gfx, btn.zone, text);
@@ -494,11 +519,7 @@ export class GameBoardScene extends Phaser.Scene {
     });
 
     const onKeyDown = (event) => {
-      let opt = null;
-      if (event.code === 'ArrowUp') opt = options.find((o) => o.direction === 'ccw');
-      else if (event.code === 'ArrowDown') opt = options.find((o) => o.direction === 'cw');
-      else if (event.code === 'ArrowLeft') opt = chuoOpts[0];
-      else if (event.code === 'ArrowRight') opt = chuoOpts[1] || chuoOpts[0];
+      const opt = options.find((o) => o.key === event.code);
       if (opt) choose(opt);
     };
     this.input.keyboard.on('keydown', onKeyDown);
