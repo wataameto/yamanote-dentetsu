@@ -424,9 +424,10 @@ export class GameBoardScene extends Phaser.Scene {
     this.logText.setText(`📢 ${msg}`);
   }
 
-  // 待ち時間(移動アニメ・ターン間の間など)をspeedFactorに応じて短くする
+  // 待ち時間(移動アニメ・ターン間の間など)をspeedFactorに応じて変える。
+  // 「はやさ」は数字が小さいほど速い(待ち時間が短い)ので、そのまま掛け算する。
   delay(ms, cb) {
-    return this.time.delayedCall(ms / this.speedFactor, cb);
+    return this.time.delayedCall(ms * this.speedFactor, cb);
   }
 
   // ---------- セーブ ----------
@@ -508,7 +509,7 @@ export class GameBoardScene extends Phaser.Scene {
     );
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 54, '数字が大きいほど、移動や演出の待ち時間が短くなります', {
+        .text(width / 2, height / 2 - panelH / 2 + 54, '数字が小さいほど、移動や演出の待ち時間が短く(はやく)なります', {
           fontFamily: FONT_FAMILY,
           fontSize: '13px',
           color: '#777',
@@ -561,7 +562,7 @@ export class GameBoardScene extends Phaser.Scene {
     this.rollButton.setVisible(isHuman && !this.turnMoved && !this.gameOver);
     if (isHuman && !this.gameOver) this.renderHand(player);
     if (!isHuman && !this.gameOver) {
-      this.delay(700, () => this.cpuTakeTurn());
+      this.delay(1000, () => this.cpuTakeTurn());
     }
   }
 
@@ -980,14 +981,14 @@ export class GameBoardScene extends Phaser.Scene {
 
   animateSteps(player, remaining, shortcutAtStep, stepFn, stepDone) {
     if (remaining <= 0) {
-      this.delay(150, () => this.resolveCell(player));
+      this.delay(220, () => this.resolveCell(player));
       return;
     }
     const useShortcut = stepDone + 1 === shortcutAtStep;
     player.pos = stepFn(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.delay(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
+    this.delay(140, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
   }
 
   resolveCell(player) {
@@ -1215,7 +1216,7 @@ export class GameBoardScene extends Phaser.Scene {
   afterCellResolved(player) {
     this.checkNoranekoTransfer();
     this.updateHud();
-    this.delay(200, () => this.endTurn());
+    this.delay(320, () => this.endTurn());
   }
 
   checkNoranekoTransfer() {
@@ -1266,7 +1267,7 @@ export class GameBoardScene extends Phaser.Scene {
         player.pos = { onChuo: true, index: idx === 0 ? 1 : 3, chuoDir: 1 };
       }
       this.refreshTokenPositions();
-      this.delay(200, () => this.resolveCell(player));
+      this.delay(320, () => this.resolveCell(player));
       return;
     }
 
