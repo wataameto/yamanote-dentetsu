@@ -27,6 +27,8 @@ export class GameBoardScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     this.layout = buildStationPositions(width, height);
+    // 駅名の文字にコマが重ならないよう、ボタン中央ではなく左寄りに置く
+    this.tokenBaseOffsetX = -this.layout.buttonWidth * 0.28;
 
     this.sfx = this.registry.get('sfx');
     if (!this.sfx) {
@@ -35,6 +37,9 @@ export class GameBoardScene extends Phaser.Scene {
     }
     this.sfx.playTheme();
     this.events.once('shutdown', () => this.sfx.stopTheme());
+
+    // ゲーム内の各種待ち時間(移動アニメ・ターン間の間など)の速さ。1/2/4倍から選べる
+    this.speedFactor = this.registry.get('speedFactor') ?? 1;
 
     let startMessage = 'たびの はじまり! めざせ 総資産1位!';
     if (data.loadData) {
@@ -130,19 +135,27 @@ export class GameBoardScene extends Phaser.Scene {
     chuoLine.lineTo(kanda.x, kanda.y);
     chuoLine.strokePath();
 
-    // 小マス(メインループ)
+    // 小マス(メインループ)。路線の色に埋もれて見えにくいので、四角にして少し右にずらす
+    const SMALL_CELL_SIZE = 20;
+    const SMALL_CELL_OFFSET_X = 14;
     this.smallCellDots = {};
     this.board.mainLoop.forEach((cell, idx) => {
       if (cell.type === 'station') return;
       const pos = this.smallCellPixelPos(idx);
-      const dot = this.add.circle(pos.x, pos.y, 9, SMALL_CELL_COLOR[cell.type]).setStrokeStyle(2, 0x000000).setDepth(0);
+      const dot = this.add
+        .rectangle(pos.x + SMALL_CELL_OFFSET_X, pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
+        .setStrokeStyle(2, 0x000000)
+        .setDepth(1);
       this.smallCellDots[`main-${idx}`] = dot;
     });
     // 小マス(中央線)
     this.board.chuoPath.forEach((cell, idx) => {
       if (cell.type === 'station') return;
       const pos = this.chuoCellPixelPos(idx);
-      const dot = this.add.circle(pos.x, pos.y, 9, SMALL_CELL_COLOR[cell.type]).setStrokeStyle(2, 0x000000).setDepth(0);
+      const dot = this.add
+        .rectangle(pos.x + SMALL_CELL_OFFSET_X, pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
+        .setStrokeStyle(2, 0x000000)
+        .setDepth(1);
       this.smallCellDots[`chuo-${idx}`] = dot;
     });
 
@@ -210,16 +223,18 @@ export class GameBoardScene extends Phaser.Scene {
 
   createToken(player) {
     const pos = this.cellPixelPos(player.pos);
-    const circle = this.add.circle(pos.x, pos.y, 14, player.color).setStrokeStyle(2, 0x000000).setDepth(6);
-    const label = this.add.text(pos.x, pos.y, player.emoji, { fontSize: '48px' }).setOrigin(0.5).setDepth(7);
+    const bx = pos.x + this.tokenBaseOffsetX;
+    const circle = this.add.circle(bx, pos.y, 14, player.color).setStrokeStyle(2, 0x000000).setDepth(6);
+    const label = this.add.text(bx, pos.y, player.emoji, { fontSize: '48px' }).setOrigin(0.5).setDepth(7);
     return { circle, label };
   }
 
   moveTokenTo(playerIdx, pos, offset = { x: 0, y: 0 }) {
     const token = this.playerTokens[playerIdx];
     const p = this.cellPixelPos(pos);
-    token.circle.setPosition(p.x + offset.x, p.y + offset.y);
-    token.label.setPosition(p.x + offset.x, p.y + offset.y);
+    const bx = p.x + this.tokenBaseOffsetX;
+    token.circle.setPosition(bx + offset.x, p.y + offset.y);
+    token.label.setPosition(bx + offset.x, p.y + offset.y);
   }
 
   refreshTokenPositions() {
@@ -298,7 +313,11 @@ export class GameBoardScene extends Phaser.Scene {
       .text(centerX, listTop + listH + 4, '', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#cc6600', fontStyle: 'bold' })
       .setOrigin(0.5, 0);
 
-    this.logText = this.add.text(16, height - 30, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#444' }).setOrigin(0, 1);
+    // 品川のすぐ下、画面下端の空きスペースにメッセージ表示欄を置く
+    // (大崎/高輪ゲートウェイと同じ高さだと駅名と重なってしまうため)
+    this.logText = this.add
+      .text(centerX, height - 12, '', { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#444' })
+      .setOrigin(0.5, 1);
 
     const bottomBandH = bottomBandTop - chuoBottom;
     const diceH = 56;
@@ -313,26 +332,57 @@ export class GameBoardScene extends Phaser.Scene {
     this.centerX = centerX;
     this.bottomBandTop = bottomBandTop;
 
+    // 右上に「音を消す」「セーブ」「はやさ」を横並びで大きめに表示する
+    const topRowY = 10;
+    const topRowFontSize = '18px';
+    const speedLabels = { 1: '⏱ はやさ:1倍', 2: '⏱ はやさ:2倍', 4: '⏱ はやさ:4倍' };
+
+    this.speedText = this.add
+      .text(0, topRowY, speedLabels[this.speedFactor], { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
+      .setOrigin(0, 0)
+      .setDepth(7)
+      .setInteractive({ useHandCursor: true });
+    this.speedText.on('pointerdown', () => {
+      const order = [1, 2, 4];
+      const next = order[(order.indexOf(this.speedFactor) + 1) % order.length];
+      this.speedFactor = next;
+      this.registry.set('speedFactor', next);
+      this.speedText.setText(speedLabels[next]);
+      layoutTopRow();
+    });
+
+    this.saveText = this.add
+      .text(0, topRowY, '💾 セーブ', { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
+      .setOrigin(0, 0)
+      .setDepth(7)
+      .setInteractive({ useHandCursor: true });
+    this.saveText.on('pointerdown', () => this.openSaveModal());
+
     this.muteText = this.add
-      .text(width - 16, 8, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', {
+      .text(0, topRowY, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', {
         fontFamily: FONT_FAMILY,
-        fontSize: '14px',
+        fontSize: topRowFontSize,
         color: '#555',
       })
-      .setOrigin(1, 0)
+      .setOrigin(0, 0)
       .setDepth(7)
       .setInteractive({ useHandCursor: true });
     this.muteText.on('pointerdown', () => {
       const muted = this.sfx.toggleMute();
       this.muteText.setText(muted ? '🔇 音を出す' : '🔊 音を消す');
+      layoutTopRow();
     });
 
-    this.saveText = this.add
-      .text(width - 16, 30, '💾 セーブ', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#555' })
-      .setOrigin(1, 0)
-      .setDepth(7)
-      .setInteractive({ useHandCursor: true });
-    this.saveText.on('pointerdown', () => this.openSaveModal());
+    const layoutTopRow = () => {
+      const gap = 24;
+      let x = width - 16;
+      [this.muteText, this.saveText, this.speedText].forEach((t) => {
+        x -= t.width;
+        t.setPosition(x, topRowY);
+        x -= gap;
+      });
+    };
+    layoutTopRow();
 
     this.handContainer = [];
   }
@@ -356,6 +406,11 @@ export class GameBoardScene extends Phaser.Scene {
   log(msg) {
     this.recentLog = msg;
     this.logText.setText(`📢 ${msg}`);
+  }
+
+  // 待ち時間(移動アニメ・ターン間の間など)をspeedFactorに応じて短くする
+  delay(ms, cb) {
+    return this.time.delayedCall(ms / this.speedFactor, cb);
   }
 
   // ---------- セーブ ----------
@@ -412,7 +467,7 @@ export class GameBoardScene extends Phaser.Scene {
     this.rollButton.setVisible(isHuman && !this.turnMoved && !this.gameOver);
     if (isHuman && !this.gameOver) this.renderHand(player);
     if (!isHuman && !this.gameOver) {
-      this.time.delayedCall(700, () => this.cpuTakeTurn());
+      this.delay(700, () => this.cpuTakeTurn());
     }
   }
 
@@ -550,54 +605,67 @@ export class GameBoardScene extends Phaser.Scene {
     });
 
     // 中央線は新宿・神田どちら側からでも、反時計回り/時計回りどちらの進行中でも
-    // 通りがかれば入れる(進行方向と分岐点の組み合わせを全4パターン確認する)。
+    // 通りがかれば入れる。ただし「今まさに分岐点に乗っている」場合は進行方向に
+    // 関係なく同じ1つの分岐なので、二重に出さないようここだけ特別扱いする。
     const usedKeys = new Set(options.map((o) => o.key));
     const junctions = [this.board.shinjukuCellIndex, this.board.kandaCellIndex];
-    [
-      { stepFn: stepForward, stepFnName: 'forward' },
-      { stepFn: stepBackward, stepFnName: 'backward' },
-    ].forEach(({ stepFn, stepFnName }) => {
-      junctions.forEach((junctionCellIndex) => {
-        const chuoOpt = this.findChuoBranch(player.pos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys);
-        if (chuoOpt) {
-          options.push(chuoOpt);
-          usedKeys.add(chuoOpt.key);
-        }
+    if (!player.pos.onChuo && junctions.includes(player.pos.index)) {
+      const chuoOpt = this.chuoEntryHereOption(player.pos, totalSteps, usedKeys);
+      if (chuoOpt) options.push(chuoOpt);
+    } else {
+      [
+        { stepFn: stepForward, stepFnName: 'forward' },
+        { stepFn: stepBackward, stepFnName: 'backward' },
+      ].forEach(({ stepFn, stepFnName }) => {
+        junctions.forEach((junctionCellIndex) => {
+          const chuoOpt = this.findChuoBranchPassThrough(player.pos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys);
+          if (chuoOpt) {
+            options.push(chuoOpt);
+            usedKeys.add(chuoOpt.key);
+          }
+        });
       });
-    });
+    }
 
     return options;
   }
 
-  // startPosからstepFn方向にtotalStepsぶん進む間にjunctionCellIndex(新宿 or 神田)を
-  // 通るなら、そこで中央線に入った場合の行き先を返す。通らないならnull。
-  findChuoBranch(startPos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys) {
-    const junctionPos = { onChuo: false, index: junctionCellIndex };
-    const chuoEntryPos = stepFn(this.board, junctionPos, true);
-    let key = this.arrowKeyForStep(junctionPos, chuoEntryPos);
+  // 今まさに新宿/神田のセルに乗っている場合の中央線オプション(進行方向を問わず1つだけ)
+  chuoEntryHereOption(startPos, totalSteps, usedKeys) {
+    const chuoPos = this.simulatePath(startPos, totalSteps, stepForward, 1);
+    const chuoEntryPos = stepForward(this.board, startPos, true);
+    let key = this.arrowKeyForStep(startPos, chuoEntryPos);
     if (usedKeys && usedKeys.has(key)) {
-      // 上下左右のどれかが既に使われていたら、空いている軸にずらす
       const fallback = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].find((k) => !usedKeys.has(k));
       key = fallback || key;
     }
+    return {
+      direction: 'chuo',
+      label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
+      steps: totalSteps,
+      pos: chuoPos,
+      shortcutAtStep: 1,
+      stepFn: 'forward',
+      key,
+    };
+  }
 
-    if (!startPos.onChuo && startPos.index === junctionCellIndex) {
-      const chuoPos = this.simulatePath(startPos, totalSteps, stepFn, 1);
-      return {
-        direction: 'chuo',
-        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
-        steps: totalSteps,
-        pos: chuoPos,
-        shortcutAtStep: 1,
-        stepFn: stepFnName,
-        key,
-      };
-    }
+  // startPosからstepFn方向にtotalStepsぶん進む「途中で」junctionCellIndex(新宿 or 神田)を
+  // 通るなら、そこで中央線に入った場合の行き先を返す。通らないならnull。
+  // (startPos自体が分岐点の場合はchuoEntryHereOptionで扱うのでここでは対象外)
+  findChuoBranchPassThrough(startPos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys) {
     let pos = { ...startPos };
     for (let s = 1; s < totalSteps; s++) {
       pos = stepFn(this.board, pos, false);
       if (!pos.onChuo && pos.index === junctionCellIndex) {
         const chuoPos = this.simulatePath(startPos, totalSteps, stepFn, s + 1);
+        const junctionPos = { onChuo: false, index: junctionCellIndex };
+        const chuoEntryPos = stepFn(this.board, junctionPos, true);
+        let key = this.arrowKeyForStep(junctionPos, chuoEntryPos);
+        if (usedKeys && usedKeys.has(key)) {
+          const fallback = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].find((k) => !usedKeys.has(k));
+          key = fallback || key;
+        }
         return {
           direction: 'chuo',
           label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
@@ -710,14 +778,14 @@ export class GameBoardScene extends Phaser.Scene {
 
   animateSteps(player, remaining, shortcutAtStep, stepFn, stepDone) {
     if (remaining <= 0) {
-      this.time.delayedCall(150, () => this.resolveCell(player));
+      this.delay(150, () => this.resolveCell(player));
       return;
     }
     const useShortcut = stepDone + 1 === shortcutAtStep;
     player.pos = stepFn(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.time.delayedCall(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
+    this.delay(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
   }
 
   resolveCell(player) {
@@ -909,7 +977,7 @@ export class GameBoardScene extends Phaser.Scene {
   afterCellResolved(player) {
     this.checkNoranekoTransfer();
     this.updateHud();
-    this.time.delayedCall(200, () => this.endTurn());
+    this.delay(200, () => this.endTurn());
   }
 
   checkNoranekoTransfer() {
@@ -960,7 +1028,7 @@ export class GameBoardScene extends Phaser.Scene {
         player.pos = { onChuo: true, index: idx === 0 ? 1 : 3, chuoDir: 1 };
       }
       this.refreshTokenPositions();
-      this.time.delayedCall(200, () => this.resolveCell(player));
+      this.delay(200, () => this.resolveCell(player));
       return;
     }
 

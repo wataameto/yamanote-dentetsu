@@ -15,4 +15,4 @@ const config = {
   scene: [TitleScene, GameBoardScene],
 };
 
-window.__game = new Phaser.Game(config);
+window.__game = window.__game = new Phaser.Game(config);
