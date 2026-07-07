@@ -310,6 +310,14 @@ export class GameBoardScene extends Phaser.Scene {
     for (let i = 0; i < diceCount; i++) steps += 1 + Math.floor(Math.random() * 6);
     this.turnMoved = true;
     this.rollButton.setVisible(false);
+
+    // 目的地を通り越さないよう、届く場合はそこでピタッと止める(余ったマスは使わない)
+    if (!takeShortcut && !player.pos.onChuo) {
+      const targetCellIndex = this.board.stationCellIndex[this.targetStationIndex];
+      const distToTarget = mainLoopDistance(this.board, player.pos.index, targetCellIndex);
+      if (distToTarget <= steps) steps = distToTarget;
+    }
+
     this.log(`${player.name}は サイコロ${diceCount}個で ${steps}マス すすむ!`);
     this.animateSteps(player, steps, takeShortcut, 0);
   }
