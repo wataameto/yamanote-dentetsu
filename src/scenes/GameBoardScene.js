@@ -38,8 +38,9 @@ export class GameBoardScene extends Phaser.Scene {
     this.sfx.playTheme();
     this.events.once('shutdown', () => this.sfx.stopTheme());
 
-    // ゲーム内の各種待ち時間(移動アニメ・ターン間の間など)の速さ。1/2/4倍から選べる
-    this.speedFactor = this.registry.get('speedFactor') ?? 1;
+    // ゲーム内の各種待ち時間(移動アニメ・ターン間の間など)の速さ。1〜10段階、初期値5
+    this.speedLevel = this.registry.get('speedLevel') ?? 5;
+    this.speedFactor = this.speedLevel / 5;
 
     let startMessage = 'たびの はじまり! めざせ 総資産1位!';
     if (data.loadData) {
@@ -115,7 +116,7 @@ export class GameBoardScene extends Phaser.Scene {
   // ---------- 盤面の見た目 ----------
 
   drawBoard() {
-    const { points, chuoPoints, buttonWidth, buttonHeight } = this.layout;
+    const { points, chuoPoints, buttonWidth, buttonHeight, centerX } = this.layout;
 
     const routeLine = this.add.graphics();
     routeLine.lineStyle(6, 0x9acd32, 1);
@@ -135,25 +136,29 @@ export class GameBoardScene extends Phaser.Scene {
     chuoLine.lineTo(kanda.x, kanda.y);
     chuoLine.strokePath();
 
-    // 小マス(メインループ)。路線の色に埋もれて見えにくいので、四角にして少し右にずらす
+    // 小マス(メインループ)。路線の色に埋もれて見えにくいので、四角にして駅名より
+    // 外側(右の列なら右、左の列なら左)にずらす
     const SMALL_CELL_SIZE = 20;
-    const SMALL_CELL_OFFSET_X = 14;
+    const SMALL_CELL_OFFSET = 40;
+    const outwardOffsetX = (x) => (x >= centerX ? SMALL_CELL_OFFSET : -SMALL_CELL_OFFSET);
     this.smallCellDots = {};
     this.board.mainLoop.forEach((cell, idx) => {
       if (cell.type === 'station') return;
       const pos = this.smallCellPixelPos(idx);
       const dot = this.add
-        .rectangle(pos.x + SMALL_CELL_OFFSET_X, pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
+        .rectangle(pos.x + outwardOffsetX(pos.x), pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
         .setStrokeStyle(2, 0x000000)
         .setDepth(1);
       this.smallCellDots[`main-${idx}`] = dot;
     });
-    // 小マス(中央線)
+    // 小マス(中央線)。新宿-四ツ谷間(idx0)と御茶ノ水-神田間(idx4)は本線との
+    // 継ぎ目そのものなので、ずらさずちょうど繋ぎ目の位置に置く
     this.board.chuoPath.forEach((cell, idx) => {
       if (cell.type === 'station') return;
       const pos = this.chuoCellPixelPos(idx);
+      const isJoint = idx === 0 || idx === 4;
       const dot = this.add
-        .rectangle(pos.x + SMALL_CELL_OFFSET_X, pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
+        .rectangle(pos.x + (isJoint ? 0 : outwardOffsetX(pos.x)), pos.y, SMALL_CELL_SIZE, SMALL_CELL_SIZE, SMALL_CELL_COLOR[cell.type])
         .setStrokeStyle(2, 0x000000)
         .setDepth(1);
       this.smallCellDots[`chuo-${idx}`] = dot;
@@ -299,19 +304,15 @@ export class GameBoardScene extends Phaser.Scene {
 
     const rowH = 30;
     const listH = this.players.length * rowH;
-    const turnH = 30;
     const topBandH = chuoTop - topBandBottom;
-    const listTop = topBandBottom + (topBandH - (listH + turnH +4)) / 2;
+    const listTop = topBandBottom + (topBandH - listH) / 2;
 
+    // 手番は一覧の▶マークで示すので、別枠の「〜の番!」表示は出さない
     this.playerCashTexts = this.players.map((p, i) =>
       this.add
         .text(centerX, listTop + i * rowH, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
         .setOrigin(0.5, 0)
     );
-
-    this.turnText = this.add
-      .text(centerX, listTop + listH + 4, '', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#cc6600', fontStyle: 'bold' })
-      .setOrigin(0.5, 0);
 
     // 品川のすぐ下、画面下端の空きスペースにメッセージ表示欄を置く
     // (大崎/高輪ゲートウェイと同じ高さだと駅名と重なってしまうため)
@@ -335,21 +336,21 @@ export class GameBoardScene extends Phaser.Scene {
     // 右上に「音を消す」「セーブ」「はやさ」を横並びで大きめに表示する
     const topRowY = 10;
     const topRowFontSize = '18px';
-    const speedLabels = { 1: '⏱ はやさ:1倍', 2: '⏱ はやさ:2倍', 4: '⏱ はやさ:4倍' };
 
-    this.speedText = this.add
-      .text(0, topRowY, speedLabels[this.speedFactor], { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
+    // 左上にも「タイトルへ」ボタン(セーブボタンと同じ、セーブ/タイトル画面を開く)
+    this.titleShortcutText = this.add
+      .text(16, topRowY, '🏠 タイトルへ', { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
       .setOrigin(0, 0)
       .setDepth(7)
       .setInteractive({ useHandCursor: true });
-    this.speedText.on('pointerdown', () => {
-      const order = [1, 2, 4];
-      const next = order[(order.indexOf(this.speedFactor) + 1) % order.length];
-      this.speedFactor = next;
-      this.registry.set('speedFactor', next);
-      this.speedText.setText(speedLabels[next]);
-      layoutTopRow();
-    });
+    this.titleShortcutText.on('pointerdown', () => this.openSaveModal());
+
+    this.speedText = this.add
+      .text(0, topRowY, `⏱ はやさ:${this.speedLevel}`, { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
+      .setOrigin(0, 0)
+      .setDepth(7)
+      .setInteractive({ useHandCursor: true });
+    this.speedText.on('pointerdown', () => this.openSpeedModal());
 
     this.saveText = this.add
       .text(0, topRowY, '💾 セーブ', { fontFamily: FONT_FAMILY, fontSize: topRowFontSize, color: '#555' })
@@ -398,7 +399,6 @@ export class GameBoardScene extends Phaser.Scene {
       this.playerCashTexts[i].setColor(isTurn ? '#cc6600' : '#000');
       this.playerCashTexts[i].setFontStyle(isTurn ? 'bold' : 'normal');
     });
-    this.turnText.setText(`▶ ${currentPlayer.emoji}${currentPlayer.name} の番!`);
     this.updateTargetMarker();
     this.refreshTokenPositions();
   }
@@ -419,7 +419,7 @@ export class GameBoardScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     const rowH = 42;
-    const panelH = 90 + SAVE_SLOT_COUNT * rowH;
+    const panelH = 140 + SAVE_SLOT_COUNT * rowH;
     const objs = [];
     const bg = this.add.rectangle(width / 2, height / 2, 440, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
     objs.push(bg);
@@ -442,6 +442,84 @@ export class GameBoardScene extends Phaser.Scene {
         saveGame(slot, this.buildSaveData());
         this.sfx.click();
         this.log(`スロット${slot}に セーブしました!`);
+        objs.forEach((o) => o.destroy());
+      });
+      btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
+      btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
+    }
+    const closeBtn = drawRoundedButton(this, width / 2 - 100, height / 2 + panelH / 2 - 26, 160, 36, { depth: 40 });
+    const closeText = this.add.text(width / 2 - 100, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(41);
+    objs.push(closeBtn.gfx, closeBtn.zone, closeText);
+    closeBtn.on('pointerdown', () => {
+      this.sfx.click();
+      objs.forEach((o) => o.destroy());
+    });
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(BUTTON_FILL_HOVER));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(BUTTON_FILL));
+
+    const titleBtn = drawRoundedButton(this, width / 2 + 100, height / 2 + panelH / 2 - 26, 220, 36, { depth: 40 });
+    const titleText = this.add
+      .text(width / 2 + 100, height / 2 + panelH / 2 - 26, 'セーブしないでタイトルへ', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#000' })
+      .setOrigin(0.5)
+      .setDepth(41);
+    objs.push(titleBtn.gfx, titleBtn.zone, titleText);
+    titleBtn.on('pointerdown', () => {
+      this.sfx.click();
+      objs.forEach((o) => o.destroy());
+      this.scene.start('TitleScene');
+    });
+    titleBtn.on('pointerover', () => titleBtn.setFillStyle(BUTTON_FILL_HOVER));
+    titleBtn.on('pointerout', () => titleBtn.setFillStyle(BUTTON_FILL));
+  }
+
+  openSpeedModal() {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const cols = 5;
+    const rows = 2;
+    const cellW = 70;
+    const cellH = 50;
+    const panelW = cols * cellW + 40;
+    const panelH = 130 + rows * cellH;
+    const objs = [];
+    const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
+    objs.push(bg);
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 26, 'はやさを えらんでね(1〜10)', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
+        .setOrigin(0.5)
+        .setDepth(41)
+    );
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 54, '数字が大きいほど、移動や演出の待ち時間が短くなります', {
+          fontFamily: FONT_FAMILY,
+          fontSize: '13px',
+          color: '#777',
+        })
+        .setOrigin(0.5)
+        .setDepth(41)
+    );
+    const gridTop = height / 2 - panelH / 2 + 84;
+    const gridLeft = width / 2 - (cols * cellW) / 2 + cellW / 2;
+    for (let level = 1; level <= 10; level++) {
+      const col = (level - 1) % cols;
+      const row = Math.floor((level - 1) / cols);
+      const bx = gridLeft + col * cellW;
+      const by = gridTop + row * cellH;
+      const isCurrent = level === this.speedLevel;
+      const btn = drawRoundedButton(this, bx, by, cellW - 10, cellH - 10, {
+        strokeColor: isCurrent ? ACCENT_STROKE : undefined,
+        strokeWidth: isCurrent ? 4 : 2,
+      });
+      const text = this.add.text(bx, by, `${level}`, { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' }).setOrigin(0.5).setDepth(41);
+      objs.push(btn.gfx, btn.zone, text);
+      btn.on('pointerdown', () => {
+        this.speedLevel = level;
+        this.speedFactor = level / 5;
+        this.registry.set('speedLevel', level);
+        this.speedText.setText(`⏱ はやさ:${level}`);
+        this.sfx.click();
         objs.forEach((o) => o.destroy());
       });
       btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
@@ -1042,6 +1120,7 @@ export class GameBoardScene extends Phaser.Scene {
     player.cash += bonus;
     this.log(`🎉 ${player.name}が目的地「${STATIONS[this.targetStationIndex].name}」に一番乗り! +¥${bonus}`);
     this.sfx.goal();
+    this.celebrateGoal(this.targetStationIndex, bonus);
 
     // ノラネコ: 目的地から一番遠いプレイヤーに居着く(到着した本人は距離0=対象外)
     const oldTargetIdx = this.targetStationIndex;
@@ -1066,6 +1145,41 @@ export class GameBoardScene extends Phaser.Scene {
 
     this.targetStationIndex = this.pickNewTarget();
     this.updateHud();
+  }
+
+  // 目的地到着時の演出。絵文字が弾け飛んで、画面がパッと光る
+  celebrateGoal(stationIndex, bonus) {
+    const p = this.layout.points[stationIndex];
+    const emojis = ['🎉', '✨', '🎊', '⭐'];
+    for (let i = 0; i < 10; i++) {
+      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 60 + Math.random() * 60;
+      const text = this.add.text(p.x, p.y, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(50);
+      this.tweens.add({
+        targets: text,
+        x: p.x + Math.cos(angle) * dist,
+        y: p.y + Math.sin(angle) * dist - 30,
+        alpha: 0,
+        scale: 1.6,
+        duration: 700 + Math.random() * 300,
+        ease: 'Cubic.easeOut',
+        onComplete: () => text.destroy(),
+      });
+    }
+    const bonusText = this.add
+      .text(p.x, p.y - 40, `+¥${bonus}!`, { fontFamily: FONT_FAMILY, fontSize: '26px', color: '#ff8800', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(51);
+    this.tweens.add({
+      targets: bonusText,
+      y: p.y - 90,
+      alpha: 0,
+      duration: 1000,
+      ease: 'Cubic.easeOut',
+      onComplete: () => bonusText.destroy(),
+    });
+    this.cameras.main.flash(250, 255, 220, 120);
   }
 
   pickNewTarget() {
