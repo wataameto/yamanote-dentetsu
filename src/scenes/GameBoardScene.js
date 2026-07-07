@@ -549,14 +549,22 @@ export class GameBoardScene extends Phaser.Scene {
       key: this.arrowKeyForStep(player.pos, cwFirstStep),
     });
 
+    // 中央線は新宿・神田どちら側からでも、反時計回り/時計回りどちらの進行中でも
+    // 通りがかれば入れる(進行方向と分岐点の組み合わせを全4パターン確認する)。
     const usedKeys = new Set(options.map((o) => o.key));
-    const ccwChuo = this.findChuoBranch(player.pos, totalSteps, stepForward, this.board.shinjukuCellIndex, 'forward', usedKeys);
-    if (ccwChuo) {
-      options.push(ccwChuo);
-      usedKeys.add(ccwChuo.key);
-    }
-    const cwChuo = this.findChuoBranch(player.pos, totalSteps, stepBackward, this.board.kandaCellIndex, 'backward', usedKeys);
-    if (cwChuo) options.push(cwChuo);
+    const junctions = [this.board.shinjukuCellIndex, this.board.kandaCellIndex];
+    [
+      { stepFn: stepForward, stepFnName: 'forward' },
+      { stepFn: stepBackward, stepFnName: 'backward' },
+    ].forEach(({ stepFn, stepFnName }) => {
+      junctions.forEach((junctionCellIndex) => {
+        const chuoOpt = this.findChuoBranch(player.pos, totalSteps, stepFn, junctionCellIndex, stepFnName, usedKeys);
+        if (chuoOpt) {
+          options.push(chuoOpt);
+          usedKeys.add(chuoOpt.key);
+        }
+      });
+    });
 
     return options;
   }
@@ -949,7 +957,7 @@ export class GameBoardScene extends Phaser.Scene {
         player.pos = { onChuo: false, index: this.board.stationCellIndex[idx] };
       } else if (def.effect === 'chuoStation') {
         const idx = Math.floor(Math.random() * CHUO_STATIONS.length);
-        player.pos = { onChuo: true, index: idx === 0 ? 1 : 3 };
+        player.pos = { onChuo: true, index: idx === 0 ? 1 : 3, chuoDir: 1 };
       }
       this.refreshTokenPositions();
       this.time.delayedCall(200, () => this.resolveCell(player));

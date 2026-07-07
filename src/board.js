@@ -48,35 +48,44 @@ export function buildBoard(rng = Math.random) {
 }
 
 // 駒(プレイヤー)を1マス進める。中央線への分岐/合流をここで処理する。
-// pos: { onChuo: boolean, index: number }
-// takeShortcut: 新宿セルに乗っている状態でこの関数を呼ぶ場合、中央線を使うかどうか
+// pos: { onChuo: boolean, index: number, chuoDir?: 1 | -1 }
+// 中央線は新宿側からも神田側からも、進行方向(反時計回り/時計回り)に関係なく
+// 入れる。一度中央線に入ったら、入った側と逆側に抜けるまでchuoDirの向きに歩く。
+// takeShortcut: 新宿 or 神田のセルに乗っている状態でこの関数を呼ぶ場合、中央線を使うかどうか
 export function stepForward(board, pos, takeShortcut) {
   if (!pos.onChuo) {
     if (pos.index === board.shinjukuCellIndex && takeShortcut) {
-      return { onChuo: true, index: 0 };
+      return { onChuo: true, index: 0, chuoDir: 1 };
+    }
+    if (pos.index === board.kandaCellIndex && takeShortcut) {
+      return { onChuo: true, index: board.chuoPath.length - 1, chuoDir: -1 };
     }
     return { onChuo: false, index: (pos.index + 1) % board.mainLoop.length };
   }
-  // 中央線を歩いている途中
-  if (pos.index + 1 >= board.chuoPath.length) {
-    return { onChuo: false, index: board.kandaCellIndex };
-  }
-  return { onChuo: true, index: pos.index + 1 };
+  return stepChuo(board, pos);
 }
 
-// 駒を1マス「時計回り」(stepForwardと逆方向)に進める。神田セルにいる状態で
-// takeShortcut=trueなら中央線に逆側から入る(御茶ノ水側から)。
+// 駒を1マス「時計回り」(stepForwardと逆方向)に進める。
 export function stepBackward(board, pos, takeShortcut) {
   if (!pos.onChuo) {
     if (pos.index === board.kandaCellIndex && takeShortcut) {
-      return { onChuo: true, index: board.chuoPath.length - 1 };
+      return { onChuo: true, index: board.chuoPath.length - 1, chuoDir: -1 };
+    }
+    if (pos.index === board.shinjukuCellIndex && takeShortcut) {
+      return { onChuo: true, index: 0, chuoDir: 1 };
     }
     return { onChuo: false, index: (pos.index - 1 + board.mainLoop.length) % board.mainLoop.length };
   }
-  if (pos.index - 1 < 0) {
-    return { onChuo: false, index: board.shinjukuCellIndex };
-  }
-  return { onChuo: true, index: pos.index - 1 };
+  return stepChuo(board, pos);
+}
+
+// 中央線上を歩く処理は、入った側(chuoDir)に沿って進み、逆側で本線に合流する。
+// 反時計回り/時計回りどちらで来たかには依存しない。
+function stepChuo(board, pos) {
+  const next = pos.index + pos.chuoDir;
+  if (next < 0) return { onChuo: false, index: board.shinjukuCellIndex };
+  if (next >= board.chuoPath.length) return { onChuo: false, index: board.kandaCellIndex };
+  return { onChuo: true, index: next, chuoDir: pos.chuoDir };
 }
 
 export function getCell(board, pos) {
