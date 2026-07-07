@@ -17,6 +17,8 @@ const TOKEN_OFFSETS = [
   { x: 0, y: 14 },
   { x: 14, y: 14 },
 ];
+// 「はやさ」レベル(1〜10)ごとの、1マス分の移動アニメにかける秒数。数字が小さいほど短い(はやい)。
+const STEP_SECONDS_TABLE = [0.12, 0.16, 0.2, 0.25, 0.3, 0.38, 0.46, 0.55, 0.68, 0.85];
 
 export class GameBoardScene extends Phaser.Scene {
   constructor() {
@@ -39,8 +41,9 @@ export class GameBoardScene extends Phaser.Scene {
     this.events.once('shutdown', () => this.sfx.stopTheme());
 
     // ゲーム内の各種待ち時間(移動アニメ・ターン間の間など)の速さ。1〜10段階、初期値5
+    // stepMs = 1マス分の移動アニメにかける実時間(ミリ秒)。数字が小さいほど短い(はやい)。
     this.speedLevel = this.registry.get('speedLevel') ?? 5;
-    this.speedFactor = this.speedLevel / 5;
+    this.stepMs = STEP_SECONDS_TABLE[this.speedLevel - 1] * 1000;
 
     let startMessage = 'たびの はじまり! めざせ 総資産1位!';
     if (data.loadData) {
@@ -424,10 +427,10 @@ export class GameBoardScene extends Phaser.Scene {
     this.logText.setText(`📢 ${msg}`);
   }
 
-  // 待ち時間(移動アニメ・ターン間の間など)をspeedFactorに応じて変える。
-  // 「はやさ」は数字が小さいほど速い(待ち時間が短い)ので、そのまま掛け算する。
-  delay(ms, cb) {
-    return this.time.delayedCall(ms * this.speedFactor, cb);
+  // ticksは「1マス分の移動アニメ(stepMs秒)」を単位とした倍数。
+  // 「はやさ」レベルはSTEP_SECONDS_TABLEで秒数を直接指定しているので、ここでは掛け算のみ行う。
+  delay(ticks, cb) {
+    return this.time.delayedCall(ticks * this.stepMs, cb);
   }
 
   // ---------- セーブ ----------
@@ -494,8 +497,8 @@ export class GameBoardScene extends Phaser.Scene {
     const height = this.scale.height;
     const cols = 5;
     const rows = 2;
-    const cellW = 70;
-    const cellH = 50;
+    const cellW = 76;
+    const cellH = 62;
     const panelW = cols * cellW + 40;
     const panelH = 130 + rows * cellH;
     const objs = [];
@@ -509,7 +512,7 @@ export class GameBoardScene extends Phaser.Scene {
     );
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 54, '数字が小さいほど、移動や演出の待ち時間が短く(はやく)なります', {
+        .text(width / 2, height / 2 - panelH / 2 + 54, '数字が小さいほど、1マス分の移動が早く(短い秒数で)おわります', {
           fontFamily: FONT_FAMILY,
           fontSize: '13px',
           color: '#777',
@@ -517,7 +520,7 @@ export class GameBoardScene extends Phaser.Scene {
         .setOrigin(0.5)
         .setDepth(41)
     );
-    const gridTop = height / 2 - panelH / 2 + 84;
+    const gridTop = height / 2 - panelH / 2 + 90;
     const gridLeft = width / 2 - (cols * cellW) / 2 + cellW / 2;
     for (let level = 1; level <= 10; level++) {
       const col = (level - 1) % cols;
@@ -529,11 +532,18 @@ export class GameBoardScene extends Phaser.Scene {
         strokeColor: isCurrent ? ACCENT_STROKE : undefined,
         strokeWidth: isCurrent ? 4 : 2,
       });
-      const text = this.add.text(bx, by, `${level}`, { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' }).setOrigin(0.5).setDepth(41);
-      objs.push(btn.gfx, btn.zone, text);
+      const text = this.add
+        .text(bx, by - 10, `${level}`, { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
+        .setOrigin(0.5)
+        .setDepth(41);
+      const secText = this.add
+        .text(bx, by + 14, `${STEP_SECONDS_TABLE[level - 1].toFixed(2)}秒`, { fontFamily: FONT_FAMILY, fontSize: '11px', color: '#777' })
+        .setOrigin(0.5)
+        .setDepth(41);
+      objs.push(btn.gfx, btn.zone, text, secText);
       btn.on('pointerdown', () => {
         this.speedLevel = level;
-        this.speedFactor = level / 5;
+        this.stepMs = STEP_SECONDS_TABLE[level - 1] * 1000;
         this.registry.set('speedLevel', level);
         this.speedText.setText(`⏱ はやさ:${level}`);
         this.sfx.click();
@@ -562,7 +572,7 @@ export class GameBoardScene extends Phaser.Scene {
     this.rollButton.setVisible(isHuman && !this.turnMoved && !this.gameOver);
     if (isHuman && !this.gameOver) this.renderHand(player);
     if (!isHuman && !this.gameOver) {
-      this.delay(1000, () => this.cpuTakeTurn());
+      this.delay(3, () => this.cpuTakeTurn());
     }
   }
 
@@ -574,7 +584,7 @@ export class GameBoardScene extends Phaser.Scene {
   renderHand(player) {
     const centerX = this.centerX;
     const labelY = this.diceY + this.diceH / 2 + 18;
-    const y = labelY + 26;
+    const y = labelY + 50;
     if (player.cards.length === 0) {
       const t = this.add
         .text(centerX, labelY, 'てもち カード: なし', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#777' })
@@ -939,8 +949,11 @@ export class GameBoardScene extends Phaser.Scene {
     );
 
     const KEY_ARROW = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+    // 選択肢の表示順はキーの実際の向きに関わらずいつも ↑←→↓ の並びにする
+    const KEY_ORDER = ['ArrowUp', 'ArrowLeft', 'ArrowRight', 'ArrowDown'];
+    const sortedOptions = [...options].sort((a, b) => KEY_ORDER.indexOf(a.key) - KEY_ORDER.indexOf(b.key));
 
-    options.forEach((opt, i) => {
+    sortedOptions.forEach((opt, i) => {
       const by = height / 2 - panelH / 2 + 100 + i * rowH;
       const btn = drawRoundedButton(this, width / 2, by, 360, 44, { depth: 20 });
       const text = this.add
@@ -981,14 +994,14 @@ export class GameBoardScene extends Phaser.Scene {
 
   animateSteps(player, remaining, shortcutAtStep, stepFn, stepDone) {
     if (remaining <= 0) {
-      this.delay(220, () => this.resolveCell(player));
+      this.delay(1, () => this.resolveCell(player));
       return;
     }
     const useShortcut = stepDone + 1 === shortcutAtStep;
     player.pos = stepFn(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.delay(140, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
+    this.delay(1, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
   }
 
   resolveCell(player) {
@@ -1216,7 +1229,7 @@ export class GameBoardScene extends Phaser.Scene {
   afterCellResolved(player) {
     this.checkNoranekoTransfer();
     this.updateHud();
-    this.delay(320, () => this.endTurn());
+    this.delay(1.5, () => this.endTurn());
   }
 
   checkNoranekoTransfer() {
@@ -1267,7 +1280,7 @@ export class GameBoardScene extends Phaser.Scene {
         player.pos = { onChuo: true, index: idx === 0 ? 1 : 3, chuoDir: 1 };
       }
       this.refreshTokenPositions();
-      this.delay(320, () => this.resolveCell(player));
+      this.delay(1.5, () => this.resolveCell(player));
       return;
     }
 
