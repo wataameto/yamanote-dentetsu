@@ -1085,7 +1085,8 @@ export class GameBoardScene extends Phaser.Scene {
 
     if (unowned.length > 0) {
       if (player.isCPU) {
-        // CPUは手持ちに余裕があれば安いものから買う
+        // CPUは手持ちに余裕があれば安いものから買う(複数買ってもログが上書きされないよう1件にまとめる)
+        const bought = [];
         unowned
           .slice()
           .sort((a, b) => a.price - b.price)
@@ -1093,9 +1094,14 @@ export class GameBoardScene extends Phaser.Scene {
             if (player.cash >= prop.price * 1.3) {
               prop.ownerId = player.id;
               player.cash -= prop.price;
-              this.log(`CPUが「${prop.name}」を購入(¥${prop.price})`);
+              bought.push(prop);
             }
           });
+        if (bought.length > 0) {
+          const total = bought.reduce((sum, p) => sum + p.price, 0);
+          const names = bought.map((p) => `「${p.name}」`).join('');
+          this.log(`${player.name}が${names}を購入(¥${total})`);
+        }
         proceedAfterShopping();
       } else {
         this.log(`${STATIONS[stationIndex].name}駅に とうちゃく`);
@@ -1207,8 +1213,11 @@ export class GameBoardScene extends Phaser.Scene {
     const farthestPlayer = this.players[farthestIdx];
     if (this.noranekoOwnerId !== farthestPlayer.id) {
       this.noranekoOwnerId = farthestPlayer.id;
-      this.log(`🐈 ノラネコが ${farthestPlayer.name} に ついてきた…`);
-      this.sfx.noranekoAttach();
+      // ゴールのログをすぐ消してしまわないよう少し遅らせて出す
+      this.delay(2, () => {
+        this.log(`🐈 ノラネコが ${farthestPlayer.name} に ついてきた…`);
+        this.sfx.noranekoAttach();
+      });
     }
 
     this.targetStationIndex = this.pickNewTarget();
@@ -1276,9 +1285,10 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   afterCellResolved(player) {
-    this.checkNoranekoTransfer();
+    // ノラネコ移動のログは、直前のマス処理ログを消してしまわないよう少し遅らせて出す
+    this.delay(1, () => this.checkNoranekoTransfer());
     this.updateHud();
-    this.delay(1.5, () => this.endTurn());
+    this.delay(2.5, () => this.endTurn());
   }
 
   checkNoranekoTransfer() {
@@ -1544,10 +1554,12 @@ export class GameBoardScene extends Phaser.Scene {
       this.useCard(this.currentPlayerIndex, progressIdx);
       return;
     }
-    // 20%で妨害カードを使う
+    // 20%で妨害カードを使う(ログが読めるよう、サイコロを振るまで少し待つ)
     const attackIdx = player.cards.findIndex((c) => CARD_DEFS[c].category === 'attack');
     if (attackIdx !== -1 && Math.random() < 0.2) {
       this.useCard(this.currentPlayerIndex, attackIdx);
+      this.delay(1.5, () => this.rollAndChooseMove(player, 1));
+      return;
     }
     this.rollAndChooseMove(player, 1);
   }
