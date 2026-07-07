@@ -59,7 +59,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.add
-      .text(width / 2, height / 2 + 230, 'あなた 🐕 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#777' })
+      .text(width / 2, height / 2 + 230, 'あなた 🐶 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#777' })
       .setOrigin(0.5);
 
     const continueBtn = drawRoundedButton(this, width / 2, height / 2 + 280, 220, 50, { depth: 5 });

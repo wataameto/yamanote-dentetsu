@@ -73,7 +73,7 @@ export class GameBoardScene extends Phaser.Scene {
     const startCells = startStationIdx.map((i) => this.board.stationCellIndex[i]);
 
     this.players = [
-      { id: 'you', name: 'あなた', emoji: '🐕', color: 0x4477ff, isCPU: false, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[0] }, cards: [] },
+      { id: 'you', name: 'あなた', emoji: '🐶', color: 0x4477ff, isCPU: false, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[0] }, cards: [] },
       { id: 'cpu1', name: 'CPU1', emoji: '🐱', color: 0xff6666, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[1] }, cards: [] },
       { id: 'cpu2', name: 'CPU2', emoji: '🐰', color: 0x55bb55, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[2] }, cards: [] },
       { id: 'cpu3', name: 'CPU3', emoji: '🐻', color: 0xbb77ee, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[3] }, cards: [] },
