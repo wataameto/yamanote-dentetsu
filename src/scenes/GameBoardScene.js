@@ -6,6 +6,7 @@ import { buildProperties, stationIncome, isMonopoly, totalPropertyValue } from '
 import { CARD_DEFS, drawRandomCard } from '../cards.js';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
 import { SFX } from '../sfx.js';
+import { saveGame, SAVE_SLOT_COUNT, slotSummary } from '../save.js';
 
 const FONT_FAMILY = '"Kosugi Maru", sans-serif';
 const STARTING_CASH = 3000;
@@ -25,9 +26,34 @@ export class GameBoardScene extends Phaser.Scene {
   create(data = {}) {
     const width = this.scale.width;
     const height = this.scale.height;
-    this.years = data.years ?? 5;
-
     this.layout = buildStationPositions(width, height);
+
+    this.sfx = this.registry.get('sfx');
+    if (!this.sfx) {
+      this.sfx = new SFX();
+      this.registry.set('sfx', this.sfx);
+    }
+    this.sfx.playTheme();
+    this.events.once('shutdown', () => this.sfx.stopTheme());
+
+    let startMessage = 'たびの はじまり! めざせ 総資産1位!';
+    if (data.loadData) {
+      this.loadFromSaveData(data.loadData);
+      startMessage = 'つづきから さいかい!';
+    } else {
+      this.setupNewGame(data);
+    }
+
+    this.drawBoard();
+    this.drawHud();
+    this.playerTokens = this.players.map((p) => this.createToken(p));
+    this.log(startMessage);
+    this.updateHud();
+    this.refreshTurnUI();
+  }
+
+  setupNewGame(data) {
+    this.years = data.years ?? 5;
     this.board = buildBoard();
     this.properties = buildProperties();
 
@@ -43,27 +69,42 @@ export class GameBoardScene extends Phaser.Scene {
       { id: 'cpu3', name: 'CPU3', emoji: '🐻', color: 0xbb77ee, isCPU: true, cash: STARTING_CASH, pos: { onChuo: false, index: startCells[3] }, cards: [] },
     ];
     this.currentPlayerIndex = 0;
-
-    this.sfx = this.registry.get('sfx');
-    if (!this.sfx) {
-      this.sfx = new SFX();
-      this.registry.set('sfx', this.sfx);
-    }
-    this.sfx.playTheme();
-    this.events.once('shutdown', () => this.sfx.stopTheme());
     this.month = 1;
     this.year = 1;
     this.gameOver = false;
     this.turnMoved = false;
     this.noranekoOwnerId = null;
     this.targetStationIndex = this.pickNewTarget();
+  }
 
-    this.drawBoard();
-    this.drawHud();
-    this.playerTokens = this.players.map((p) => this.createToken(p));
-    this.log('たびの はじまり! めざせ 総資産1位!');
-    this.updateHud();
-    this.refreshTurnUI();
+  loadFromSaveData(saveData) {
+    this.years = saveData.years;
+    this.board = saveData.board;
+    this.properties = saveData.properties;
+    this.players = saveData.players;
+    this.currentPlayerIndex = saveData.currentPlayerIndex;
+    this.month = saveData.month;
+    this.year = saveData.year;
+    this.gameOver = saveData.gameOver;
+    this.turnMoved = saveData.turnMoved;
+    this.noranekoOwnerId = saveData.noranekoOwnerId;
+    this.targetStationIndex = saveData.targetStationIndex;
+  }
+
+  buildSaveData() {
+    return {
+      years: this.years,
+      board: this.board,
+      properties: this.properties,
+      players: this.players,
+      currentPlayerIndex: this.currentPlayerIndex,
+      month: this.month,
+      year: this.year,
+      gameOver: this.gameOver,
+      turnMoved: this.turnMoved,
+      noranekoOwnerId: this.noranekoOwnerId,
+      targetStationIndex: this.targetStationIndex,
+    };
   }
 
   // ---------- 盤面の見た目 ----------
@@ -286,6 +327,13 @@ export class GameBoardScene extends Phaser.Scene {
       this.muteText.setText(muted ? '🔇 音を出す' : '🔊 音を消す');
     });
 
+    this.saveText = this.add
+      .text(width - 16, 30, '💾 セーブ', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#555' })
+      .setOrigin(1, 0)
+      .setDepth(7)
+      .setInteractive({ useHandCursor: true });
+    this.saveText.on('pointerdown', () => this.openSaveModal());
+
     this.handContainer = [];
   }
 
@@ -308,6 +356,51 @@ export class GameBoardScene extends Phaser.Scene {
   log(msg) {
     this.recentLog = msg;
     this.logText.setText(`📢 ${msg}`);
+  }
+
+  // ---------- セーブ ----------
+
+  openSaveModal() {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const rowH = 42;
+    const panelH = 90 + SAVE_SLOT_COUNT * rowH;
+    const objs = [];
+    const bg = this.add.rectangle(width / 2, height / 2, 440, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
+    objs.push(bg);
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 24, 'どこにセーブする?', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
+        .setOrigin(0.5)
+        .setDepth(41)
+    );
+    for (let slot = 1; slot <= SAVE_SLOT_COUNT; slot++) {
+      const by = height / 2 - panelH / 2 + 56 + (slot - 1) * rowH;
+      const summary = slotSummary(slot);
+      const label = summary
+        ? `スロット${slot}: ${summary.year}年目${summary.month}月/${summary.years}年 ¥${summary.cash}`
+        : `スロット${slot}: 空き`;
+      const btn = drawRoundedButton(this, width / 2, by, 380, 36, { depth: 40 });
+      const text = this.add.text(width / 2, by, label, { fontFamily: FONT_FAMILY, fontSize: '15px', color: '#000' }).setOrigin(0.5).setDepth(41);
+      objs.push(btn.gfx, btn.zone, text);
+      btn.on('pointerdown', () => {
+        saveGame(slot, this.buildSaveData());
+        this.sfx.click();
+        this.log(`スロット${slot}に セーブしました!`);
+        objs.forEach((o) => o.destroy());
+      });
+      btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
+      btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
+    }
+    const closeBtn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 26, 140, 36, { depth: 40 });
+    const closeText = this.add.text(width / 2, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(41);
+    objs.push(closeBtn.gfx, closeBtn.zone, closeText);
+    closeBtn.on('pointerdown', () => {
+      this.sfx.click();
+      objs.forEach((o) => o.destroy());
+    });
+    closeBtn.on('pointerover', () => closeBtn.setFillStyle(BUTTON_FILL_HOVER));
+    closeBtn.on('pointerout', () => closeBtn.setFillStyle(BUTTON_FILL));
   }
 
   refreshTurnUI() {
