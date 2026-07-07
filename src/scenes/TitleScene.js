@@ -35,10 +35,13 @@ export class TitleScene extends Phaser.Scene {
       .text(width / 2, height / 2 - 60, 'プレイ年数をえらんでね', { fontFamily: FONT_FAMILY, fontSize: '24px', color: '#333' })
       .setOrigin(0.5);
 
-    const years = [3, 5, 10];
+    const years = [1, 3, 5, 10, 20, 30];
+    const cols = 3;
     years.forEach((y, i) => {
-      const bx = width / 2 + (i - 1) * 180;
-      const by = height / 2 + 10;
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const bx = width / 2 + (col - 1) * 180;
+      const by = height / 2 + 10 + row * 84;
       const btn = drawRoundedButton(this, bx, by, 150, 70, { strokeColor: y === 5 ? ACCENT_STROKE : undefined, strokeWidth: y === 5 ? 4 : 2 });
       this.add
         .text(bx, by, `${y}年`, { fontFamily: FONT_FAMILY, fontSize: '26px', color: '#000' })
@@ -53,7 +56,7 @@ export class TitleScene extends Phaser.Scene {
     });
 
     this.add
-      .text(width / 2, height / 2 + 150, 'あなた 🐕 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#777' })
+      .text(width / 2, height / 2 + 180, 'あなた 🐕 vs CPU 🐱🐰🐻 の4人対戦', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#777' })
       .setOrigin(0.5);
 
     this.muteText = this.add
