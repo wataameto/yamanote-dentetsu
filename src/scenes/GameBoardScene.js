@@ -17,8 +17,10 @@ const TOKEN_OFFSETS = [
   { x: 0, y: 14 },
   { x: 14, y: 14 },
 ];
-// 「はやさ」レベル(1〜10)ごとの、1マス分の移動アニメにかける秒数。数字が小さいほど短い(はやい)。
+// 「はやさ」レベル(1〜10)ごとの基準となる待ち時間(秒)。数字が小さいほど短い(はやい)。
 const STEP_SECONDS_TABLE = [0.2, 0.28, 0.36, 0.45, 0.55, 0.68, 0.82, 1.0, 1.2, 1.5];
+// マス移動アニメ(1マスごとの駒の見た目の進み)だけは、他の待ちより速く進める倍率
+const MOVE_STEP_TICKS = 0.4;
 
 export class GameBoardScene extends Phaser.Scene {
   constructor() {
@@ -1033,7 +1035,7 @@ export class GameBoardScene extends Phaser.Scene {
     player.pos = stepFn(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.delay(1, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
+    this.delay(MOVE_STEP_TICKS, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
   }
 
   resolveCell(player) {
