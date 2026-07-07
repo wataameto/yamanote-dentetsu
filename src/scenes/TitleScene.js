@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
 import { SFX } from '../sfx.js';
-import { SAVE_SLOT_COUNT, loadGame, slotSummary } from '../save.js';
+import { SAVE_SLOT_COUNT, loadGame, slotSummary, hasSave, downloadSave, uploadSaveToSlot } from '../save.js';
 
 const FONT_FAMILY = '"Kosugi Maru", sans-serif';
 
@@ -88,16 +88,20 @@ export class TitleScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     const rowH = 42;
-    const panelH = 90 + SAVE_SLOT_COUNT * rowH;
+    const panelH = 100 + SAVE_SLOT_COUNT * rowH;
+    const panelW = 500;
     const objs = [];
-    const bg = this.add.rectangle(width / 2, height / 2, 440, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
+    const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
     objs.push(bg);
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 24, 'どのセーブを よみこむ?', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' })
+        .text(width / 2, height / 2 - panelH / 2 + 24, 'どのセーブを よみこむ?(⬇書き出し/⬆読み込み)', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(41)
     );
+    const mainBtnX = width / 2 - 95;
+    const downloadBtnX = width / 2 + 130;
+    const uploadBtnX = width / 2 + 185;
     for (let slot = 1; slot <= SAVE_SLOT_COUNT; slot++) {
       const by = height / 2 - panelH / 2 + 56 + (slot - 1) * rowH;
       const summary = slotSummary(slot);
@@ -105,9 +109,9 @@ export class TitleScene extends Phaser.Scene {
       const label = empty
         ? `スロット${slot}: 空き`
         : `スロット${slot}: ${summary.year}年目${summary.month}月/${summary.years}年 ¥${summary.cash}`;
-      const btn = drawRoundedButton(this, width / 2, by, 380, 36, { depth: 40, fillColor: empty ? 0xe6e0d4 : BUTTON_FILL });
+      const btn = drawRoundedButton(this, mainBtnX, by, 300, 36, { depth: 40, fillColor: empty ? 0xe6e0d4 : BUTTON_FILL });
       const text = this.add
-        .text(width / 2, by, label, { fontFamily: FONT_FAMILY, fontSize: '15px', color: empty ? '#999' : '#000' })
+        .text(mainBtnX, by, label, { fontFamily: FONT_FAMILY, fontSize: '14px', color: empty ? '#999' : '#000' })
         .setOrigin(0.5)
         .setDepth(41);
       objs.push(btn.gfx, btn.zone, text);
@@ -121,6 +125,35 @@ export class TitleScene extends Phaser.Scene {
         btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
         btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
       }
+
+      const canDownload = hasSave(slot);
+      const dlBtn = drawRoundedButton(this, downloadBtnX, by, 44, 36, { depth: 40, fillColor: canDownload ? BUTTON_FILL : 0xe6e0d4 });
+      const dlText = this.add
+        .text(downloadBtnX, by, '⬇', { fontFamily: FONT_FAMILY, fontSize: '18px', color: canDownload ? '#000' : '#999' })
+        .setOrigin(0.5)
+        .setDepth(41);
+      objs.push(dlBtn.gfx, dlBtn.zone, dlText);
+      if (canDownload) {
+        dlBtn.on('pointerdown', () => {
+          this.sfx.click();
+          downloadSave(slot);
+        });
+        dlBtn.on('pointerover', () => dlBtn.setFillStyle(BUTTON_FILL_HOVER));
+        dlBtn.on('pointerout', () => dlBtn.setFillStyle(BUTTON_FILL));
+      }
+
+      const ulBtn = drawRoundedButton(this, uploadBtnX, by, 44, 36, { depth: 40 });
+      const ulText = this.add.text(uploadBtnX, by, '⬆', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(41);
+      objs.push(ulBtn.gfx, ulBtn.zone, ulText);
+      ulBtn.on('pointerdown', () => {
+        this.sfx.click();
+        uploadSaveToSlot(slot, () => {
+          objs.forEach((o) => o.destroy());
+          this.openLoadModal();
+        });
+      });
+      ulBtn.on('pointerover', () => ulBtn.setFillStyle(BUTTON_FILL_HOVER));
+      ulBtn.on('pointerout', () => ulBtn.setFillStyle(BUTTON_FILL));
     }
     const closeBtn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 26, 140, 36, { depth: 40 });
     const closeText = this.add.text(width / 2, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(41);
