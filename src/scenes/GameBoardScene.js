@@ -170,7 +170,7 @@ export class GameBoardScene extends Phaser.Scene {
   createToken(player) {
     const pos = this.cellPixelPos(player.pos);
     const circle = this.add.circle(pos.x, pos.y, 14, player.color).setStrokeStyle(2, 0x000000).setDepth(6);
-    const label = this.add.text(pos.x, pos.y, player.emoji, { fontSize: '16px' }).setOrigin(0.5).setDepth(7).setScale(4);
+    const label = this.add.text(pos.x, pos.y, player.emoji, { fontSize: '48px' }).setOrigin(0.5).setDepth(7);
     return { circle, label };
   }
 
