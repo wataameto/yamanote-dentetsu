@@ -1,5 +1,7 @@
 // localStorageベースのセーブ機能。スロットは10個(1〜10)。
 export const SAVE_SLOT_COUNT = 10;
+// 毎ターン自動保存する専用スロット。数値スロット(1〜10)とキーが衝突しない特別な識別子。
+export const AUTOSAVE_SLOT = 'auto';
 
 function slotKey(slot) {
   return `yamanote_dentetsu_save_${slot}`;

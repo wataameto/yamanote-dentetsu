@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
 import { SFX } from '../sfx.js';
-import { SAVE_SLOT_COUNT, loadGame, slotSummary, hasSave, downloadSave, uploadSaveToSlot } from '../save.js';
+import { SAVE_SLOT_COUNT, AUTOSAVE_SLOT, loadGame, slotSummary, hasSave, downloadSave, uploadSaveToSlot } from '../save.js';
 
 const FONT_FAMILY = '"Kosugi Maru", sans-serif';
 
@@ -88,7 +88,7 @@ export class TitleScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     const rowH = 42;
-    const panelH = 100 + SAVE_SLOT_COUNT * rowH;
+    const panelH = 100 + (SAVE_SLOT_COUNT + 1) * rowH;
     const panelW = 500;
     const objs = [];
     const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
@@ -102,13 +102,7 @@ export class TitleScene extends Phaser.Scene {
     const mainBtnX = width / 2 - 95;
     const downloadBtnX = width / 2 + 130;
     const uploadBtnX = width / 2 + 185;
-    for (let slot = 1; slot <= SAVE_SLOT_COUNT; slot++) {
-      const by = height / 2 - panelH / 2 + 56 + (slot - 1) * rowH;
-      const summary = slotSummary(slot);
-      const empty = !summary;
-      const label = empty
-        ? `スロット${slot}: 空き`
-        : `スロット${slot}: ${summary.year}年目${summary.month}月/${summary.years}年 ¥${summary.cash}`;
+    const slotRow = (slot, by, label, empty) => {
       const btn = drawRoundedButton(this, mainBtnX, by, 300, 36, { depth: 40, fillColor: empty ? 0xe6e0d4 : BUTTON_FILL });
       const text = this.add
         .text(mainBtnX, by, label, { fontFamily: FONT_FAMILY, fontSize: '14px', color: empty ? '#999' : '#000' })
@@ -125,7 +119,10 @@ export class TitleScene extends Phaser.Scene {
         btn.on('pointerover', () => btn.setFillStyle(BUTTON_FILL_HOVER));
         btn.on('pointerout', () => btn.setFillStyle(BUTTON_FILL));
       }
+      return btn;
+    };
 
+    const dlUlRow = (slot, by) => {
       const canDownload = hasSave(slot);
       const dlBtn = drawRoundedButton(this, downloadBtnX, by, 44, 36, { depth: 40, fillColor: canDownload ? BUTTON_FILL : 0xe6e0d4 });
       const dlText = this.add
@@ -154,6 +151,27 @@ export class TitleScene extends Phaser.Scene {
       });
       ulBtn.on('pointerover', () => ulBtn.setFillStyle(BUTTON_FILL_HOVER));
       ulBtn.on('pointerout', () => ulBtn.setFillStyle(BUTTON_FILL));
+    };
+
+    // オートセーブ(毎ターン自動保存)専用の行を、数値スロットの一番上に表示する
+    const autoBy = height / 2 - panelH / 2 + 56;
+    const autoSummary = slotSummary(AUTOSAVE_SLOT);
+    const autoEmpty = !autoSummary;
+    const autoLabel = autoEmpty
+      ? 'オートセーブ: なし'
+      : `⚡オートセーブ: ${autoSummary.year}年目${autoSummary.month}月/${autoSummary.years}年 ¥${autoSummary.cash}`;
+    slotRow(AUTOSAVE_SLOT, autoBy, autoLabel, autoEmpty);
+    dlUlRow(AUTOSAVE_SLOT, autoBy);
+
+    for (let slot = 1; slot <= SAVE_SLOT_COUNT; slot++) {
+      const by = height / 2 - panelH / 2 + 56 + slot * rowH;
+      const summary = slotSummary(slot);
+      const empty = !summary;
+      const label = empty
+        ? `スロット${slot}: 空き`
+        : `スロット${slot}: ${summary.year}年目${summary.month}月/${summary.years}年 ¥${summary.cash}`;
+      slotRow(slot, by, label, empty);
+      dlUlRow(slot, by);
     }
     const closeBtn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 26, 140, 36, { depth: 40 });
     const closeText = this.add.text(width / 2, height / 2 + panelH / 2 - 26, 'とじる', { fontFamily: FONT_FAMILY, fontSize: '16px', color: '#000' }).setOrigin(0.5).setDepth(41);

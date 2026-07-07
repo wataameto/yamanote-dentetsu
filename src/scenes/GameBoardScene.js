@@ -6,7 +6,7 @@ import { buildProperties, stationIncome, isMonopoly, totalPropertyValue } from '
 import { CARD_DEFS, drawRandomCard } from '../cards.js';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
 import { SFX } from '../sfx.js';
-import { saveGame, SAVE_SLOT_COUNT, slotSummary, hasSave, downloadSave, uploadSaveToSlot } from '../save.js';
+import { saveGame, SAVE_SLOT_COUNT, AUTOSAVE_SLOT, slotSummary, hasSave, downloadSave, uploadSaveToSlot } from '../save.js';
 
 const FONT_FAMILY = '"Kosugi Maru", sans-serif';
 const STARTING_CASH = 3000;
@@ -1486,6 +1486,7 @@ export class GameBoardScene extends Phaser.Scene {
     this.sfx.turnStart(!player.isCPU);
     this.updateHud();
     this.refreshTurnUI();
+    saveGame(AUTOSAVE_SLOT, this.buildSaveData());
   }
 
   // 収益を計算・加算するだけ(表示はshowSettlementModalが担当)。プレイヤーごとの{player, total}を返す。
