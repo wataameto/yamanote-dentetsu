@@ -535,10 +535,12 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   pickNewTarget() {
+    // 品川はスタート地点(全員が最初からいる/ふりだしで戻る駅)なので目的地には選ばない
+    const startStationIndex = STATIONS.findIndex((s) => s.name === '品川');
     let idx;
     do {
       idx = Math.floor(Math.random() * STATIONS.length);
-    } while (idx === this.targetStationIndex);
+    } while (idx === this.targetStationIndex || idx === startStationIndex);
     return idx;
   }
 
