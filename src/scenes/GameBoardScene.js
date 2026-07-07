@@ -63,9 +63,10 @@ export class GameBoardScene extends Phaser.Scene {
     this.board = buildBoard();
     this.properties = buildProperties();
 
-    // 4人の初期位置は盤面上でバラバラになるよう均等に離す
+    // 4人の初期位置は盤面上で均等に離しつつ、始点はゲームのたびにランダムにする
     const n = STATIONS.length;
-    const startStationIdx = [0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75)];
+    const startOffset = Math.floor(Math.random() * n);
+    const startStationIdx = [0, Math.floor(n * 0.25), Math.floor(n * 0.5), Math.floor(n * 0.75)].map((i) => (i + startOffset) % n);
     const startCells = startStationIdx.map((i) => this.board.stationCellIndex[i]);
 
     this.players = [
@@ -783,30 +784,43 @@ export class GameBoardScene extends Phaser.Scene {
   // それぞれ「本線に抜けるのに足りるか」で結果が変わる:
   //  - 足りない/ちょうど: 中央線内(または抜けた駅)に1通りだけ着地
   //  - 余りが出る: 抜けた先で反時計回り/時計回りに枝分かれし2通りになる
-  // 近い方の出口を上下キー、遠い方の出口を左右キーに割り当てる(最大4択)。
+  // キーは各方向の「実際に画面上でどちらに進むか」から決める(近い/遠いの
+  // 固定割り当てだと、見た目の向きと矢印キーがズレることがあるため)。
   computeChuoDirectionOptions(startPos, totalSteps) {
     const chuoLen = this.board.chuoPath.length;
     const towardShinjukuSteps = startPos.index + 1;
     const towardKandaSteps = chuoLen - startPos.index;
 
-    const shinjukuBranch = this.resolveChuoBranch(startPos, totalSteps, towardShinjukuSteps, -1, this.board.shinjukuCellIndex, '新宿方面');
-    const kandaBranch = this.resolveChuoBranch(startPos, totalSteps, towardKandaSteps, 1, this.board.kandaCellIndex, '神田方面');
-
-    const [nearBranch, farBranch] =
-      towardShinjukuSteps <= towardKandaSteps ? [shinjukuBranch, kandaBranch] : [kandaBranch, shinjukuBranch];
-
+    const usedKeys = new Set();
     const options = [];
-    this.pushChuoBranchOptions(nearBranch, 'ArrowUp', 'ArrowDown', options);
-    this.pushChuoBranchOptions(farBranch, 'ArrowLeft', 'ArrowRight', options);
+    this.pushChuoBranchOptions(
+      this.resolveChuoBranch(startPos, totalSteps, towardShinjukuSteps, -1, this.board.shinjukuCellIndex, '新宿方面', usedKeys),
+      options,
+      usedKeys
+    );
+    this.pushChuoBranchOptions(
+      this.resolveChuoBranch(startPos, totalSteps, towardKandaSteps, 1, this.board.kandaCellIndex, '神田方面', usedKeys),
+      options,
+      usedKeys
+    );
     return options;
   }
 
   // 中央線上のstartPosからchuoDir方向(新宿方面なら-1、神田方面なら+1)に進んだ結果。
   // 出口(exitSteps)に届かなければ中央線内に1通り、届いてちょうどなら出口駅に1通り、
-  // 余りが出るなら出口から反時計回り/時計回りに進む2通りを返す。
-  resolveChuoBranch(startPos, totalSteps, exitSteps, chuoDir, exitCellIndex, label) {
-    if (totalSteps < exitSteps) {
-      const pos = { onChuo: true, index: startPos.index + chuoDir * totalSteps, chuoDir };
+  // 余りが出るなら出口から反時計回り/時計回りに進む2通りを返す。キーはその都度
+  // 実際の1歩目の画面上の向きから決める。
+  resolveChuoBranch(startPos, totalSteps, exitSteps, chuoDir, exitCellIndex, label, usedKeys) {
+    if (totalSteps <= exitSteps) {
+      const pos =
+        totalSteps === exitSteps
+          ? { onChuo: false, index: exitCellIndex }
+          : { onChuo: true, index: startPos.index + chuoDir * totalSteps, chuoDir };
+      const firstStepPos =
+        startPos.index + chuoDir < 0 || startPos.index + chuoDir >= this.board.chuoPath.length
+          ? { onChuo: false, index: exitCellIndex }
+          : { onChuo: true, index: startPos.index + chuoDir, chuoDir };
+      const branchKey = this.pickKey(this.arrowKeyForStep(startPos, firstStepPos), usedKeys);
       return [
         {
           direction: 'chuo',
@@ -816,20 +830,7 @@ export class GameBoardScene extends Phaser.Scene {
           shortcutAtStep: null,
           stepFn: 'forward',
           startChuoDir: chuoDir,
-        },
-      ];
-    }
-    if (totalSteps === exitSteps) {
-      const pos = { onChuo: false, index: exitCellIndex };
-      return [
-        {
-          direction: 'chuo',
-          label: `🚃${label}: ${this.cellLabel(getCell(this.board, pos))}`,
-          steps: totalSteps,
-          pos,
-          shortcutAtStep: null,
-          stepFn: 'forward',
-          startChuoDir: chuoDir,
+          key: branchKey,
         },
       ];
     }
@@ -837,6 +838,8 @@ export class GameBoardScene extends Phaser.Scene {
     const exitPos = { onChuo: false, index: exitCellIndex };
     const ccwPos = this.simulatePath(exitPos, remaining, stepForward, null);
     const cwPos = this.simulatePath(exitPos, remaining, stepBackward, null);
+    const ccwFirstStep = stepForward(this.board, exitPos, false);
+    const cwFirstStep = stepBackward(this.board, exitPos, false);
     return [
       {
         direction: 'chuo',
@@ -846,6 +849,7 @@ export class GameBoardScene extends Phaser.Scene {
         shortcutAtStep: null,
         stepFn: 'forward',
         startChuoDir: chuoDir,
+        key: this.pickKey(this.arrowKeyForStep(exitPos, ccwFirstStep), usedKeys),
       },
       {
         direction: 'chuo',
@@ -855,19 +859,22 @@ export class GameBoardScene extends Phaser.Scene {
         shortcutAtStep: null,
         stepFn: 'backward',
         startChuoDir: chuoDir,
+        key: this.pickKey(this.arrowKeyForStep(exitPos, cwFirstStep), usedKeys),
       },
     ];
   }
 
-  pushChuoBranchOptions(branchOptions, keyA, keyB, options) {
-    if (branchOptions.length === 1) {
-      branchOptions[0].key = keyA;
-      options.push(branchOptions[0]);
-    } else {
-      branchOptions[0].key = keyA;
-      branchOptions[1].key = keyB;
-      options.push(branchOptions[0], branchOptions[1]);
-    }
+  // 希望のキーがすでに使われていたら、空いている矢印キーに振り替える
+  pickKey(preferredKey, usedKeys) {
+    const key = usedKeys.has(preferredKey)
+      ? ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].find((k) => !usedKeys.has(k)) || preferredKey
+      : preferredKey;
+    usedKeys.add(key);
+    return key;
+  }
+
+  pushChuoBranchOptions(branchOptions, options) {
+    options.push(...branchOptions);
   }
 
   // 中央線をはさむ経路の距離は、新宿/神田どちら経由で本線に戻るかの近似で見積もる
