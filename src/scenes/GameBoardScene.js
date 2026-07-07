@@ -229,9 +229,23 @@ export class GameBoardScene extends Phaser.Scene {
   createToken(player) {
     const pos = this.cellPixelPos(player.pos);
     const bx = pos.x + this.tokenBaseOffsetX;
+    let ring = null;
+    if (!player.isCPU) {
+      // 自分の駒だけ、下に光る輪をつけてひと目でわかるようにする
+      ring = this.add.circle(bx, pos.y, 22, 0xffee00, 0.35).setStrokeStyle(3, 0xff9900, 0.9).setDepth(5);
+      this.tweens.add({
+        targets: ring,
+        scale: 1.35,
+        alpha: 0.15,
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    }
     const circle = this.add.circle(bx, pos.y, 14, player.color).setStrokeStyle(2, 0x000000).setDepth(6);
     const label = this.add.text(bx, pos.y, player.emoji, { fontSize: '48px' }).setOrigin(0.5).setDepth(7);
-    return { circle, label };
+    return { circle, label, ring };
   }
 
   moveTokenTo(playerIdx, pos, offset = { x: 0, y: 0 }) {
@@ -240,6 +254,7 @@ export class GameBoardScene extends Phaser.Scene {
     const bx = p.x + this.tokenBaseOffsetX;
     token.circle.setPosition(bx + offset.x, p.y + offset.y);
     token.label.setPosition(bx + offset.x, p.y + offset.y);
+    if (token.ring) token.ring.setPosition(bx + offset.x, p.y + offset.y);
   }
 
   refreshTokenPositions() {
