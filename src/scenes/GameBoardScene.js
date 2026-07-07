@@ -316,10 +316,13 @@ export class GameBoardScene extends Phaser.Scene {
     const tabataIdx = STATIONS.findIndex((s) => s.name === '田端');
     const osakiIdx = STATIONS.findIndex((s) => s.name === '大崎');
     const takanawaIdx = STATIONS.findIndex((s) => s.name === '高輪ゲートウェイ');
+    const gotandaIdx = STATIONS.findIndex((s) => s.name === '五反田');
+    const tamachiIdx = STATIONS.findIndex((s) => s.name === '田町');
     const topBandBottom = Math.min(points[sugamoIdx].y, points[tabataIdx].y) + buttonHeight / 2;
     const chuoTop = Math.min(chuoPoints[0].y, chuoPoints[1].y) - buttonHeight / 2;
     const chuoBottom = Math.max(chuoPoints[0].y, chuoPoints[1].y) + buttonHeight / 2;
     const bottomBandTop = Math.max(points[osakiIdx].y, points[takanawaIdx].y) - buttonHeight / 2;
+    const logY = Math.min(points[gotandaIdx].y, points[tamachiIdx].y);
 
     const rowH = 30;
     const listH = this.players.length * rowH;
@@ -333,11 +336,10 @@ export class GameBoardScene extends Phaser.Scene {
         .setOrigin(0.5, 0)
     );
 
-    // 品川のすぐ下、画面下端の空きスペースにメッセージ表示欄を置く
-    // (大崎/高輪ゲートウェイと同じ高さだと駅名と重なってしまうため)
+    // 五反田・田町の高さ(=大崎/高輪ゲートウェイのひとつ上の行)、盤面中央の空きスペースにメッセージ表示欄を置く
     this.logText = this.add
-      .text(centerX, height - 12, '', { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#444' })
-      .setOrigin(0.5, 1);
+      .text(centerX, logY, '', { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#444' })
+      .setOrigin(0.5, 0.5);
 
     // サイコロボタンはプレイヤー一覧のすぐ下(四ツ谷/御茶ノ水より上)に置き、
     // 駅ボタンと見分けがつくよう金色のピル型+パルス演出で目立たせる
