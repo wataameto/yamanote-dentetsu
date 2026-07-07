@@ -578,6 +578,12 @@ export class GameBoardScene extends Phaser.Scene {
   // 中央線は、いま乗っている駅が新宿/神田そのものの場合だけでなく、その方向に
   // 進む途中で新宿/神田を通過する場合も分岐先として選べるようにする。
   computeDirectionOptions(player, totalSteps) {
+    // すでに中央線に乗っている場合は、専用のロジックで新宿方面/神田方面の
+    // 2方向(それぞれ本線に抜けた先で反時計回り/時計回りに枝分かれ)を計算する。
+    if (player.pos.onChuo) {
+      return this.computeChuoDirectionOptions(player.pos, totalSteps);
+    }
+
     const options = [];
 
     const ccwFirstStep = stepForward(this.board, player.pos, false);
@@ -680,6 +686,97 @@ export class GameBoardScene extends Phaser.Scene {
     return null;
   }
 
+  // すでに中央線上にいる時の移動先を計算する。新宿方面/神田方面の2方向があり、
+  // それぞれ「本線に抜けるのに足りるか」で結果が変わる:
+  //  - 足りない/ちょうど: 中央線内(または抜けた駅)に1通りだけ着地
+  //  - 余りが出る: 抜けた先で反時計回り/時計回りに枝分かれし2通りになる
+  // 近い方の出口を上下キー、遠い方の出口を左右キーに割り当てる(最大4択)。
+  computeChuoDirectionOptions(startPos, totalSteps) {
+    const chuoLen = this.board.chuoPath.length;
+    const towardShinjukuSteps = startPos.index + 1;
+    const towardKandaSteps = chuoLen - startPos.index;
+
+    const shinjukuBranch = this.resolveChuoBranch(startPos, totalSteps, towardShinjukuSteps, -1, this.board.shinjukuCellIndex, '新宿方面');
+    const kandaBranch = this.resolveChuoBranch(startPos, totalSteps, towardKandaSteps, 1, this.board.kandaCellIndex, '神田方面');
+
+    const [nearBranch, farBranch] =
+      towardShinjukuSteps <= towardKandaSteps ? [shinjukuBranch, kandaBranch] : [kandaBranch, shinjukuBranch];
+
+    const options = [];
+    this.pushChuoBranchOptions(nearBranch, 'ArrowUp', 'ArrowDown', options);
+    this.pushChuoBranchOptions(farBranch, 'ArrowLeft', 'ArrowRight', options);
+    return options;
+  }
+
+  // 中央線上のstartPosからchuoDir方向(新宿方面なら-1、神田方面なら+1)に進んだ結果。
+  // 出口(exitSteps)に届かなければ中央線内に1通り、届いてちょうどなら出口駅に1通り、
+  // 余りが出るなら出口から反時計回り/時計回りに進む2通りを返す。
+  resolveChuoBranch(startPos, totalSteps, exitSteps, chuoDir, exitCellIndex, label) {
+    if (totalSteps < exitSteps) {
+      const pos = { onChuo: true, index: startPos.index + chuoDir * totalSteps, chuoDir };
+      return [
+        {
+          direction: 'chuo',
+          label: `🚃${label}: ${this.cellLabel(getCell(this.board, pos))}`,
+          steps: totalSteps,
+          pos,
+          shortcutAtStep: null,
+          stepFn: 'forward',
+          startChuoDir: chuoDir,
+        },
+      ];
+    }
+    if (totalSteps === exitSteps) {
+      const pos = { onChuo: false, index: exitCellIndex };
+      return [
+        {
+          direction: 'chuo',
+          label: `🚃${label}: ${this.cellLabel(getCell(this.board, pos))}`,
+          steps: totalSteps,
+          pos,
+          shortcutAtStep: null,
+          stepFn: 'forward',
+          startChuoDir: chuoDir,
+        },
+      ];
+    }
+    const remaining = totalSteps - exitSteps;
+    const exitPos = { onChuo: false, index: exitCellIndex };
+    const ccwPos = this.simulatePath(exitPos, remaining, stepForward, null);
+    const cwPos = this.simulatePath(exitPos, remaining, stepBackward, null);
+    return [
+      {
+        direction: 'chuo',
+        label: `🚃${label}→反時計回り: ${this.cellLabel(getCell(this.board, ccwPos))}`,
+        steps: totalSteps,
+        pos: ccwPos,
+        shortcutAtStep: null,
+        stepFn: 'forward',
+        startChuoDir: chuoDir,
+      },
+      {
+        direction: 'chuo',
+        label: `🚃${label}→時計回り: ${this.cellLabel(getCell(this.board, cwPos))}`,
+        steps: totalSteps,
+        pos: cwPos,
+        shortcutAtStep: null,
+        stepFn: 'backward',
+        startChuoDir: chuoDir,
+      },
+    ];
+  }
+
+  pushChuoBranchOptions(branchOptions, keyA, keyB, options) {
+    if (branchOptions.length === 1) {
+      branchOptions[0].key = keyA;
+      options.push(branchOptions[0]);
+    } else {
+      branchOptions[0].key = keyA;
+      branchOptions[1].key = keyB;
+      options.push(branchOptions[0], branchOptions[1]);
+    }
+  }
+
   // 中央線をはさむ経路の距離は、新宿/神田どちら経由で本線に戻るかの近似で見積もる
   approxDistanceToTarget(pos, depth = 0) {
     const targetCell = this.board.stationCellIndex[this.targetStationIndex];
@@ -772,6 +869,11 @@ export class GameBoardScene extends Phaser.Scene {
   beginMove(player, chosen) {
     this.log(`${player.name}は ${chosen.label} すすむ!`);
     if (chosen.shortcutAtStep) this.sfx.shortcutJingle();
+    // 中央線上からの移動は、この手番で選んだ方向を実際の駒の位置にも反映する
+    // (以前の手番でどちら向きに入ったかに関係なく、今回選んだ方向を優先する)
+    if (chosen.startChuoDir !== undefined && player.pos.onChuo) {
+      player.pos = { ...player.pos, chuoDir: chosen.startChuoDir };
+    }
     const stepFn = chosen.stepFn === 'backward' ? stepBackward : stepForward;
     this.animateSteps(player, chosen.steps, chosen.shortcutAtStep, stepFn, 0);
   }
