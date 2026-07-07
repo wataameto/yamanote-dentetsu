@@ -339,18 +339,39 @@ export class GameBoardScene extends Phaser.Scene {
       .text(centerX, height - 12, '', { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#444' })
       .setOrigin(0.5, 1);
 
-    const bottomBandH = bottomBandTop - chuoBottom;
-    const diceH = 56;
-    const diceY = chuoBottom + diceH / 2 + 12;
-    this.rollButton = drawRoundedButton(this, centerX, diceY, 190, diceH, { depth: 5 });
-    this.rollButtonText = this.add.text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' }).setOrigin(0.5).setDepth(7);
+    // サイコロボタンはプレイヤー一覧のすぐ下(四ツ谷/御茶ノ水より上)に置き、
+    // 駅ボタンと見分けがつくよう金色のピル型+パルス演出で目立たせる
+    const listBottom = listTop + listH;
+    const diceGap = chuoTop - listBottom;
+    const diceH = Phaser.Math.Clamp(diceGap - 16, 32, 48);
+    const diceY = listBottom + diceGap / 2;
+    this.rollButton = drawRoundedButton(this, centerX, diceY, 200, diceH, {
+      depth: 5,
+      fillColor: 0xffd34d,
+      strokeColor: 0xdd6600,
+      strokeWidth: 4,
+      radius: diceH / 2,
+    });
+    this.rollButtonText = this.add
+      .text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#663300', fontStyle: 'bold' })
+      .setOrigin(0.5)
+      .setDepth(7);
+    this.tweens.add({
+      targets: this.rollButtonText,
+      scale: 1.1,
+      duration: 500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
     this.rollButton.on('pointerdown', () => this.onRollClicked());
-    this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(BUTTON_FILL_HOVER));
-    this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(BUTTON_FILL));
+    this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(0xffe28a));
+    this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(0xffd34d));
     this.diceY = diceY;
     this.diceH = diceH;
     this.centerX = centerX;
     this.bottomBandTop = bottomBandTop;
+    this.chuoBottom = chuoBottom;
 
     // 右上に「音を消す」「セーブ」「はやさ」を横並びで大きめに表示する
     const topRowY = 10;
@@ -583,7 +604,7 @@ export class GameBoardScene extends Phaser.Scene {
 
   renderHand(player) {
     const centerX = this.centerX;
-    const labelY = this.diceY + this.diceH / 2 + 18;
+    const labelY = this.chuoBottom + 24;
     const y = labelY + 50;
     if (player.cards.length === 0) {
       const t = this.add
@@ -1183,39 +1204,56 @@ export class GameBoardScene extends Phaser.Scene {
     this.updateHud();
   }
 
-  // 目的地到着時の演出。絵文字が弾け飛んで、画面がパッと光る
+  // 目的地到着時の演出。絵文字が弾け飛んで、画面がパッと光る(3waveぶん、長めに見せる)
   celebrateGoal(stationIndex, bonus) {
     const p = this.layout.points[stationIndex];
-    const emojis = ['🎉', '✨', '🎊', '⭐'];
-    for (let i = 0; i < 10; i++) {
-      const emoji = emojis[Math.floor(Math.random() * emojis.length)];
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 60 + Math.random() * 60;
-      const text = this.add.text(p.x, p.y, emoji, { fontSize: '28px' }).setOrigin(0.5).setDepth(50);
-      this.tweens.add({
-        targets: text,
-        x: p.x + Math.cos(angle) * dist,
-        y: p.y + Math.sin(angle) * dist - 30,
-        alpha: 0,
-        scale: 1.6,
-        duration: 700 + Math.random() * 300,
-        ease: 'Cubic.easeOut',
-        onComplete: () => text.destroy(),
+    const emojis = ['🎉', '✨', '🎊', '⭐', '🏆'];
+    const spawnWave = (delayMs) => {
+      this.time.delayedCall(delayMs, () => {
+        for (let i = 0; i < 14; i++) {
+          const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 70 + Math.random() * 90;
+          const text = this.add.text(p.x, p.y, emoji, { fontSize: '30px' }).setOrigin(0.5).setDepth(50);
+          this.tweens.add({
+            targets: text,
+            x: p.x + Math.cos(angle) * dist,
+            y: p.y + Math.sin(angle) * dist - 40,
+            alpha: 0,
+            scale: 1.8,
+            duration: 1300 + Math.random() * 500,
+            ease: 'Cubic.easeOut',
+            onComplete: () => text.destroy(),
+          });
+        }
+        this.cameras.main.flash(300, 255, 220, 120);
       });
-    }
+    };
+    spawnWave(0);
+    spawnWave(500);
+    spawnWave(1000);
+
     const bonusText = this.add
-      .text(p.x, p.y - 40, `+¥${bonus}!`, { fontFamily: FONT_FAMILY, fontSize: '26px', color: '#ff8800', fontStyle: 'bold' })
+      .text(p.x, p.y - 40, `+¥${bonus}!`, { fontFamily: FONT_FAMILY, fontSize: '30px', color: '#ff8800', fontStyle: 'bold' })
       .setOrigin(0.5)
-      .setDepth(51);
+      .setDepth(51)
+      .setScale(0.4);
     this.tweens.add({
       targets: bonusText,
-      y: p.y - 90,
+      scale: 1,
+      duration: 300,
+      ease: 'Back.easeOut',
+    });
+    this.tweens.add({
+      targets: bonusText,
+      y: p.y - 120,
       alpha: 0,
-      duration: 1000,
+      delay: 1400,
+      duration: 1200,
       ease: 'Cubic.easeOut',
       onComplete: () => bonusText.destroy(),
     });
-    this.cameras.main.flash(250, 255, 220, 120);
+    this.cameras.main.shake(300, 0.004);
   }
 
   pickNewTarget() {
@@ -1342,15 +1380,25 @@ export class GameBoardScene extends Phaser.Scene {
       this.month += 1;
       if (this.month > 12) {
         this.month = 1;
-        this.runSettlement();
+        const settlementYear = this.year;
+        const results = this.runSettlement();
         this.year += 1;
-        if (this.year > this.years) {
-          this.endGame();
-          return;
-        }
+        const isGameEnd = this.year > this.years;
+        this.showSettlementModal(settlementYear, results, () => {
+          if (isGameEnd) {
+            this.endGame();
+          } else {
+            this.continueEndTurn();
+          }
+        });
+        return;
       }
     }
-    // 新しい手番プレイヤーがノラネコ持ちなら軽い悪行
+    this.continueEndTurn();
+  }
+
+  // ノラネコの悪行・手番交代の演出をまとめた、決算モーダルを閉じた後にも呼ばれる後処理
+  continueEndTurn() {
     const player = this.players[this.currentPlayerIndex];
     if (this.noranekoOwnerId === player.id) {
       const loss = 20 + Math.floor(Math.random() * 40);
@@ -1362,15 +1410,70 @@ export class GameBoardScene extends Phaser.Scene {
     this.refreshTurnUI();
   }
 
+  // 収益を計算・加算するだけ(表示はshowSettlementModalが担当)。プレイヤーごとの{player, total}を返す。
   runSettlement() {
     this.sfx.settlement();
-    this.players.forEach((p) => {
+    const results = this.players.map((p) => {
       let total = 0;
       for (let i = 0; i < STATIONS.length; i++) total += stationIncome(this.properties, i, p.id);
       p.cash += total;
-      if (total > 0) this.log(`${this.year}年 決算: ${p.name}に収益 +¥${total}`);
+      return { player: p, total };
     });
     this.updateHud();
+    return results;
+  }
+
+  // 決算結果を全員ぶんモーダルで表示し、OKを押すまで次のターンへ進めない
+  showSettlementModal(year, results, onClose) {
+    const width = this.scale.width;
+    const height = this.scale.height;
+    const rowH = 40;
+    const panelW = 380;
+    const panelH = 130 + results.length * rowH;
+    const objs = [];
+    const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(40);
+    objs.push(bg);
+    objs.push(
+      this.add
+        .text(width / 2, height / 2 - panelH / 2 + 28, `📊 ${year}年 決算`, {
+          fontFamily: FONT_FAMILY,
+          fontSize: '22px',
+          color: '#000',
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(41)
+    );
+    results.forEach((r, i) => {
+      const by = height / 2 - panelH / 2 + 70 + i * rowH;
+      const amountText = r.total > 0 ? `+¥${r.total}` : '¥0';
+      const color = r.total > 0 ? '#2a8a2a' : '#999';
+      objs.push(
+        this.add
+          .text(width / 2 - panelW / 2 + 30, by, `${r.player.emoji} ${r.player.name}`, { fontFamily: FONT_FAMILY, fontSize: '17px', color: '#000' })
+          .setOrigin(0, 0.5)
+          .setDepth(41)
+      );
+      objs.push(
+        this.add
+          .text(width / 2 + panelW / 2 - 30, by, amountText, { fontFamily: FONT_FAMILY, fontSize: '17px', color, fontStyle: 'bold' })
+          .setOrigin(1, 0.5)
+          .setDepth(41)
+      );
+    });
+    const okBtn = drawRoundedButton(this, width / 2, height / 2 + panelH / 2 - 30, 140, 40, { depth: 40 });
+    const okText = this.add
+      .text(width / 2, height / 2 + panelH / 2 - 30, 'OK', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
+      .setOrigin(0.5)
+      .setDepth(41);
+    objs.push(okBtn.gfx, okBtn.zone, okText);
+    okBtn.on('pointerdown', () => {
+      this.sfx.click();
+      objs.forEach((o) => o.destroy());
+      onClose();
+    });
+    okBtn.on('pointerover', () => okBtn.setFillStyle(BUTTON_FILL_HOVER));
+    okBtn.on('pointerout', () => okBtn.setFillStyle(BUTTON_FILL));
   }
 
   totalAssets(player) {

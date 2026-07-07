@@ -7,6 +7,19 @@ function propertyCountForRank(rank) {
   return 2;
 }
 
+// 同じ駅の中でも「安い小物件」〜「高額な目玉物件」まで価格差が出るよう、
+// 物件数ごとに倍率の範囲を分けている(いちばん安い物件を基準の1倍とする)。
+const TIER_MULTIPLIER_RANGES = {
+  2: [[1, 1], [5, 11]],
+  3: [[1, 1], [3, 6], [10, 22]],
+  4: [[1, 1], [2.5, 4.5], [7, 14], [18, 38]],
+};
+
+function rollTierMultiplier(range, rng) {
+  const [min, max] = range;
+  return min + rng() * (max - min);
+}
+
 // 各駅にちなんだ物件名(STATIONSと同じ順)。その駅らしさが伝わるよう、名所・名物から連想して名付けている。
 const PROPERTY_NAMES = [
   ['丸の内一丁目商事', '赤レンガ観光案内所', '新幹線ホーム売店', '皇居ランニンググッズ店'], // 東京
@@ -42,15 +55,17 @@ const PROPERTY_NAMES = [
 ];
 
 export function buildProperties(rng = Math.random) {
-  // { [stationIndex]: [{ id, stationIndex, name, price, incomeRate, ownerId }] }
+  // { [stationIndex]: [{ id, stationIndex, name, price, incomeRate, ownerId }] }(価格が高い順)
   const result = {};
   STATIONS.forEach((station, i) => {
     const count = propertyCountForRank(station.rank);
     const basePrice = 300 + station.rank * 220;
     const names = PROPERTY_NAMES[i];
+    const tiers = TIER_MULTIPLIER_RANGES[count];
     const props = [];
     for (let k = 0; k < count; k++) {
-      const price = Math.round((basePrice + k * 120) * (0.9 + rng() * 0.3));
+      const multiplier = rollTierMultiplier(tiers[k], rng);
+      const price = Math.round(basePrice * multiplier * (0.9 + rng() * 0.2));
       const incomeRate = 0.14 + rng() * 0.06; // 14〜20%
       props.push({
         id: `${i}-${k}`,
@@ -61,6 +76,7 @@ export function buildProperties(rng = Math.random) {
         ownerId: null,
       });
     }
+    props.sort((a, b) => b.price - a.price);
     result[i] = props;
   });
   return result;
