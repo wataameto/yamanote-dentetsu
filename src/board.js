@@ -64,6 +64,21 @@ export function stepForward(board, pos, takeShortcut) {
   return { onChuo: true, index: pos.index + 1 };
 }
 
+// 駒を1マス「時計回り」(stepForwardと逆方向)に進める。神田セルにいる状態で
+// takeShortcut=trueなら中央線に逆側から入る(御茶ノ水側から)。
+export function stepBackward(board, pos, takeShortcut) {
+  if (!pos.onChuo) {
+    if (pos.index === board.kandaCellIndex && takeShortcut) {
+      return { onChuo: true, index: board.chuoPath.length - 1 };
+    }
+    return { onChuo: false, index: (pos.index - 1 + board.mainLoop.length) % board.mainLoop.length };
+  }
+  if (pos.index - 1 < 0) {
+    return { onChuo: false, index: board.shinjukuCellIndex };
+  }
+  return { onChuo: true, index: pos.index - 1 };
+}
+
 export function getCell(board, pos) {
   return pos.onChuo ? board.chuoPath[pos.index] : board.mainLoop[pos.index];
 }

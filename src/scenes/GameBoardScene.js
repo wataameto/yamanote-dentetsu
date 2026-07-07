@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { STATIONS, CHUO_STATIONS } from '../stations.js';
 import { buildStationPositions } from '../layout.js';
-import { buildBoard, stepForward, getCell } from '../board.js';
+import { buildBoard, stepForward, stepBackward, getCell } from '../board.js';
 import { buildProperties, stationIncome, isMonopoly, totalPropertyValue } from '../properties.js';
 import { CARD_DEFS, drawRandomCard } from '../cards.js';
 import { drawRoundedButton, BUTTON_FILL, BUTTON_FILL_HOVER, ACCENT_STROKE } from '../ui.js';
@@ -170,7 +170,7 @@ export class GameBoardScene extends Phaser.Scene {
   createToken(player) {
     const pos = this.cellPixelPos(player.pos);
     const circle = this.add.circle(pos.x, pos.y, 14, player.color).setStrokeStyle(2, 0x000000).setDepth(6);
-    const label = this.add.text(pos.x, pos.y, player.emoji, { fontSize: '16px' }).setOrigin(0.5).setDepth(7);
+    const label = this.add.text(pos.x, pos.y, player.emoji, { fontSize: '16px' }).setOrigin(0.5).setDepth(7).setScale(2);
     return { circle, label };
   }
 
@@ -206,34 +206,57 @@ export class GameBoardScene extends Phaser.Scene {
 
   drawHud() {
     const width = this.scale.width;
+    const height = this.scale.height;
     this.add.text(width / 2, 8, '山手線電鉄', { fontFamily: FONT_FAMILY, fontSize: '32px', color: '#000' }).setOrigin(0.5, 0);
     this.dateText = this.add.text(width / 2, 48, '', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#333' }).setOrigin(0.5, 0);
 
-    const rowH = 32;
+    // 盤面中央、四ツ谷/御茶ノ水の上にプレイヤー一覧、下にサイコロを配置する
+    const { points, chuoPoints, buttonHeight, centerX } = this.layout;
+    const sugamoIdx = STATIONS.findIndex((s) => s.name === '巣鴨');
+    const tabataIdx = STATIONS.findIndex((s) => s.name === '田端');
+    const osakiIdx = STATIONS.findIndex((s) => s.name === '大崎');
+    const takanawaIdx = STATIONS.findIndex((s) => s.name === '高輪ゲートウェイ');
+    const topBandBottom = Math.min(points[sugamoIdx].y, points[tabataIdx].y) + buttonHeight / 2;
+    const chuoTop = Math.min(chuoPoints[0].y, chuoPoints[1].y) - buttonHeight / 2;
+    const chuoBottom = Math.max(chuoPoints[0].y, chuoPoints[1].y) + buttonHeight / 2;
+    const bottomBandTop = Math.max(points[osakiIdx].y, points[takanawaIdx].y) - buttonHeight / 2;
+
+    const rowH = 30;
+    const listH = this.players.length * rowH;
+    const turnH = 30;
+    const topBandH = chuoTop - topBandBottom;
+    const listTop = topBandBottom + (topBandH - (listH + turnH +4)) / 2;
+
     this.playerCashTexts = this.players.map((p, i) =>
       this.add
-        .text(16, 8 + i * rowH, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
-        .setOrigin(0, 0)
+        .text(centerX, listTop + i * rowH, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' })
+        .setOrigin(0.5, 0)
     );
 
     this.turnText = this.add
-      .text(16, 8 + this.players.length * rowH + 4, '', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#cc6600', fontStyle: 'bold' })
-      .setOrigin(0, 0);
+      .text(centerX, listTop + listH + 4, '', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#cc6600', fontStyle: 'bold' })
+      .setOrigin(0.5, 0);
 
-    this.logText = this.add
-      .text(16, height_bottom(this) - 30, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#444' })
-      .setOrigin(0, 1);
+    this.logText = this.add.text(16, height - 30, '', { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#444' }).setOrigin(0, 1);
 
-    const diceY = 8 + this.players.length * rowH + 34 + 30;
-    this.rollButton = drawRoundedButton(this, 100, diceY, 170, 50, { depth: 5 });
-    this.rollButtonText = this.add.text(100, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '20px', color: '#000' }).setOrigin(0.5).setDepth(7);
+    const bottomBandH = bottomBandTop - chuoBottom;
+    const diceH = 56;
+    const muteH = 20;
+    const muteGap = 10;
+    const diceY = chuoBottom + (bottomBandH - (diceH + muteGap + muteH)) / 2 + diceH / 2;
+    this.rollButton = drawRoundedButton(this, centerX, diceY, 190, diceH, { depth: 5 });
+    this.rollButtonText = this.add.text(centerX, diceY, '🎲 サイコロ', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' }).setOrigin(0.5).setDepth(7);
     this.rollButton.on('pointerdown', () => this.onRollClicked());
     this.rollButton.on('pointerover', () => this.rollButton.setFillStyle(BUTTON_FILL_HOVER));
     this.rollButton.on('pointerout', () => this.rollButton.setFillStyle(BUTTON_FILL));
 
     this.muteText = this.add
-      .text(16, diceY + 32, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', { fontFamily: FONT_FAMILY, fontSize: '14px', color: '#555' })
-      .setOrigin(0, 0)
+      .text(centerX, diceY + diceH / 2 + muteGap, this.sfx.muted ? '🔇 音を出す' : '🔊 音を消す', {
+        fontFamily: FONT_FAMILY,
+        fontSize: '14px',
+        color: '#555',
+      })
+      .setOrigin(0.5, 0)
       .setDepth(7)
       .setInteractive({ useHandCursor: true });
     this.muteText.on('pointerdown', () => {
@@ -242,10 +265,6 @@ export class GameBoardScene extends Phaser.Scene {
     });
 
     this.handContainer = [];
-
-    function height_bottom(scene) {
-      return scene.scale.height;
-    }
   }
 
   updateHud() {
@@ -322,16 +341,17 @@ export class GameBoardScene extends Phaser.Scene {
     this.rollAndChooseMove(player, 1);
   }
 
-  // サイコロをふって、届く範囲の駅をすべて選択肢として出す(中央線ぶんきも選択肢に含む)
+  // サイコロをふって、進める方向(反時計回り/時計回り/分岐点なら中央線)を選ばせる。
+  // 常にサイコロの出目ぶん進みきる(反時計回りだけでなく時計回りにも進める)。
   rollAndChooseMove(player, diceCount) {
     let steps = 0;
     for (let i = 0; i < diceCount; i++) steps += 1 + Math.floor(Math.random() * 6);
     this.sfx.diceRoll();
     this.turnMoved = true;
     this.rollButton.setVisible(false);
-    this.log(`${player.name}は サイコロ${diceCount}個で ${steps}マスまで すすめる!`);
+    this.log(`${player.name}は サイコロ${diceCount}個で ${steps}マス すすむ!`);
 
-    const options = this.computeReachableOptions(player, steps);
+    const options = this.computeDirectionOptions(player, steps);
     if (player.isCPU) {
       this.beginMove(player, this.cpuChooseOption(options));
     } else {
@@ -344,74 +364,101 @@ export class GameBoardScene extends Phaser.Scene {
     return pos.index === this.board.stationCellIndex[this.targetStationIndex];
   }
 
-  // 現在地からNマスの範囲で止まれる駅を(中央線ぶんきも含めて)すべて列挙する
-  computeReachableOptions(player, totalSteps) {
-    const options = [];
-    let pos = { ...player.pos };
+  cellLabel(cell) {
+    if (cell.type === 'station') {
+      return cell.stationIndex !== undefined ? STATIONS[cell.stationIndex].name : CHUO_STATIONS[cell.chuoIndex].name;
+    }
+    if (cell.type === 'blue') return '青マス';
+    if (cell.type === 'red') return '赤マス';
+    if (cell.type === 'card') return 'カードマス';
+    return '';
+  }
+
+  simulatePath(startPos, totalSteps, stepFn, shortcutAtStep) {
+    let pos = { ...startPos };
     for (let s = 1; s <= totalSteps; s++) {
-      pos = stepForward(this.board, pos, false);
-      const cell = getCell(this.board, pos);
-      if (cell.type === 'station' && cell.stationIndex !== undefined) {
-        options.push({ label: STATIONS[cell.stationIndex].name, steps: s, pos: { ...pos }, shortcutAtStep: null });
-      }
-      if (!pos.onChuo && pos.index === this.board.shinjukuCellIndex && s < totalSteps) {
-        let chuoPos = pos;
-        for (let cs = s + 1; cs <= totalSteps; cs++) {
-          chuoPos = stepForward(this.board, chuoPos, cs === s + 1);
-          if (!chuoPos.onChuo) break; // 神田で本線に合流したらぶんき探索は打ち切り
-          const chuoCell = getCell(this.board, chuoPos);
-          if (chuoCell.type === 'station' && chuoCell.chuoIndex !== undefined) {
-            options.push({
-              label: CHUO_STATIONS[chuoCell.chuoIndex].name,
-              steps: cs,
-              pos: { ...chuoPos },
-              shortcutAtStep: s + 1,
-              viaChuo: true,
-            });
-          }
-        }
-      }
+      pos = stepFn(this.board, pos, s === shortcutAtStep);
     }
-    if (!options.some((o) => o.steps === totalSteps)) {
-      options.push({ label: `そのまま進む`, steps: totalSteps, pos: { ...pos }, shortcutAtStep: null, isFullRoll: true });
+    return pos;
+  }
+
+  // 現在地から出目ぶん進んだ先を、反時計回り/時計回り/(分岐点なら)中央線の
+  // 最大3方向ぶん計算する。行けない方向は選択肢に出さない。
+  computeDirectionOptions(player, totalSteps) {
+    const options = [];
+
+    const ccwPos = this.simulatePath(player.pos, totalSteps, stepForward, null);
+    options.push({
+      direction: 'ccw',
+      label: `反時計回り: ${this.cellLabel(getCell(this.board, ccwPos))}`,
+      steps: totalSteps,
+      pos: ccwPos,
+      shortcutAtStep: null,
+      stepFn: 'forward',
+    });
+
+    const cwPos = this.simulatePath(player.pos, totalSteps, stepBackward, null);
+    options.push({
+      direction: 'cw',
+      label: `時計回り: ${this.cellLabel(getCell(this.board, cwPos))}`,
+      steps: totalSteps,
+      pos: cwPos,
+      shortcutAtStep: null,
+      stepFn: 'backward',
+    });
+
+    if (!player.pos.onChuo && player.pos.index === this.board.shinjukuCellIndex) {
+      const chuoPos = this.simulatePath(player.pos, totalSteps, stepForward, 1);
+      options.push({
+        direction: 'chuo',
+        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
+        steps: totalSteps,
+        pos: chuoPos,
+        shortcutAtStep: 1,
+        stepFn: 'forward',
+      });
+    } else if (!player.pos.onChuo && player.pos.index === this.board.kandaCellIndex) {
+      const chuoPos = this.simulatePath(player.pos, totalSteps, stepBackward, 1);
+      options.push({
+        direction: 'chuo',
+        label: `🚃中央線へ: ${this.cellLabel(getCell(this.board, chuoPos))}`,
+        steps: totalSteps,
+        pos: chuoPos,
+        shortcutAtStep: 1,
+        stepFn: 'backward',
+      });
     }
+
     return options;
   }
 
   cpuChooseOption(options) {
     const targetOpt = options.find((o) => this.isTargetPos(o.pos));
     if (targetOpt) return targetOpt;
-    return options.reduce((best, o) => (o.steps > best.steps ? o : best), options[0]);
+    const chuoOpt = options.find((o) => o.direction === 'chuo');
+    if (chuoOpt && Math.random() < 0.4) return chuoOpt;
+    return options.find((o) => o.direction === 'ccw');
   }
 
   showMoveChoiceModal(player, options) {
     const width = this.scale.width;
     const height = this.scale.height;
-    const cols = options.length > 6 ? 2 : 1;
-    const rows = Math.ceil(options.length / cols);
-    const rowH = 50;
-    const panelH = 110 + rows * rowH;
-    const panelW = cols === 2 ? 620 : 400;
+    const rowH = 54;
+    const panelH = 110 + options.length * rowH;
+    const panelW = 420;
     const objs = [];
     const bg = this.add.rectangle(width / 2, height / 2, panelW, panelH, 0xffffff, 0.98).setStrokeStyle(3, ACCENT_STROKE).setDepth(20);
     objs.push(bg);
     objs.push(
       this.add
-        .text(width / 2, height / 2 - panelH / 2 + 26, 'どこまで すすむ?', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' })
+        .text(width / 2, height / 2 - panelH / 2 + 26, 'どっちに すすむ?', { fontFamily: FONT_FAMILY, fontSize: '22px', color: '#000' })
         .setOrigin(0.5)
         .setDepth(21)
     );
     options.forEach((opt, i) => {
-      const col = Math.floor(i / rows);
-      const row = i % rows;
-      const bx = width / 2 + (cols === 2 ? (col === 0 ? -155 : 155) : 0);
-      const by = height / 2 - panelH / 2 + 66 + row * rowH;
-      const btnW = cols === 2 ? 290 : 360;
-      const btn = drawRoundedButton(this, bx, by, btnW, 42, { depth: 20 });
-      const label = opt.isFullRoll
-        ? `そのまま進む(${opt.steps}マス)`
-        : `${opt.label}(${opt.steps}マス)${opt.viaChuo ? ' 🚃中央線' : ''}`;
-      const text = this.add.text(bx, by, label, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(21);
+      const by = height / 2 - panelH / 2 + 70 + i * rowH;
+      const btn = drawRoundedButton(this, width / 2, by, 360, 44, { depth: 20 });
+      const text = this.add.text(width / 2, by, opt.label, { fontFamily: FONT_FAMILY, fontSize: '18px', color: '#000' }).setOrigin(0.5).setDepth(21);
       objs.push(btn.gfx, btn.zone, text);
       btn.on('pointerdown', () => {
         objs.forEach((o) => o.destroy());
@@ -424,21 +471,22 @@ export class GameBoardScene extends Phaser.Scene {
   }
 
   beginMove(player, chosen) {
-    this.log(`${player.name}は ${chosen.isFullRoll ? 'そのまま' : chosen.label + 'へ'} すすむ!(${chosen.steps}マス)`);
+    this.log(`${player.name}は ${chosen.label} すすむ!`);
     if (chosen.shortcutAtStep) this.sfx.shortcutJingle();
-    this.animateSteps(player, chosen.steps, chosen.shortcutAtStep, 0);
+    const stepFn = chosen.stepFn === 'backward' ? stepBackward : stepForward;
+    this.animateSteps(player, chosen.steps, chosen.shortcutAtStep, stepFn, 0);
   }
 
-  animateSteps(player, remaining, shortcutAtStep, stepDone) {
+  animateSteps(player, remaining, shortcutAtStep, stepFn, stepDone) {
     if (remaining <= 0) {
       this.time.delayedCall(150, () => this.resolveCell(player));
       return;
     }
     const useShortcut = stepDone + 1 === shortcutAtStep;
-    player.pos = stepForward(this.board, player.pos, useShortcut);
+    player.pos = stepFn(this.board, player.pos, useShortcut);
     this.refreshTokenPositions();
     this.sfx.step();
-    this.time.delayedCall(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepDone + 1));
+    this.time.delayedCall(90, () => this.animateSteps(player, remaining - 1, shortcutAtStep, stepFn, stepDone + 1));
   }
 
   resolveCell(player) {
