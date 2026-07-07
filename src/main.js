@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { StageSelectScene } from './scenes/StageSelectScene.js';
-import { StationScene } from './scenes/StationScene.js';
+import { TitleScene } from './scenes/TitleScene.js';
+import { GameBoardScene } from './scenes/GameBoardScene.js';
 
 const config = {
   type: Phaser.AUTO,
@@ -12,7 +12,7 @@ const config = {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [StageSelectScene, StationScene],
+  scene: [TitleScene, GameBoardScene],
 };
 
 new Phaser.Game(config);
